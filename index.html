@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>Potato 搜圖</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      margin-top: 20vh;
+      background: #fff;
+      color: #000;
+    }
+    input[type="text"] {
+      width: 50%;
+      padding: 10px;
+      font-size: 18px;
+    }
+    button {
+      margin: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+    #results {
+      margin-top: 30px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      padding: 1rem;
+    }
+    img {
+      width: 100%;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🥔 Potato 搜圖</h1>
+  <input type="text" id="query" placeholder="輸入關鍵字或 SS編號" />
+  <div>
+    <button onclick="search()">找圖</button>
+    <button onclick="random()">隨便一張</button>
+  </div>
+  <div id="results"></div>
+
+  <script>
+    const API_BASE = "https://spongebob.potatomatoyota.workers.dev";
+
+    async function search() {
+      const query = document.getElementById("query").value.trim();
+      if (!query) return;
+
+      const res = await fetch(`${API_BASE}/image?search=${encodeURIComponent(query)}&limit=12`);
+      const data = await res.json();
+      displayImages(data.results || [data]);
+    }
+
+    async function random() {
+      const res = await fetch(`${API_BASE}/image?random&limit=12`);
+      const data = await res.json();
+      displayImages(data.results || [data]);
+    }
+
+    function displayImages(images) {
+      const container = document.getElementById("results");
+      container.innerHTML = "";
+      for (const img of images) {
+        const el = document.createElement("img");
+        el.src = img.url;
+        el.alt = img.text;
+        container.appendChild(el);
+      }
+    }
+  </script>
+</body>
+</html>
