@@ -987,14 +987,23 @@
                 const blob = await response.blob();
                 const imageUrl = URL.createObjectURL(blob);
                 
+                // 從回應標頭獲取圖片標題（如果有）
+                let imageTitle = "搜尋結果";
+                
+                // 嘗試從回應標頭獲取圖片標題
+                const titleHeader = response.headers.get('x-image-text');
+                if (titleHeader) {
+                    imageTitle = decodeURIComponent(decodeURIComponent(titleHeader));
+                }
+                
                 resultsContainer.innerHTML = `
                     <div class="results-summary">找到 1 張圖片</div>
                     <div class="single-image-container">
-                        <div class="grid-item" style="max-width: 500px; margin: 0 auto;">
-                            <img src="${imageUrl}" alt="搜尋結果" loading="eager">
+                        <div class="grid-item" style="max-width: 600px; margin: 0 auto;">
+                            <img src="${imageUrl}" alt="${imageTitle}" loading="eager">
                             <div class="grid-info">
                                 <div class="grid-code">${query}</div>
-                                <div class="grid-text">搜尋結果</div>
+                                <div class="grid-text">${imageTitle}</div>
                             </div>
                         </div>
                     </div>
@@ -1239,6 +1248,7 @@
     
     // 處理圖片點擊事件
     function handleImageClick(e) {
+        
         const img = e.target.closest('.grid-item img');
         if (!img) return;
         
