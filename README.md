@@ -4,3 +4,5 @@
 網站部署於：[cloudflare pages](https://spongebobsearch.pages.dev)
 
 全部圖片都於[GitHub](https://github.com/potatomatoyota/spongebobimage)託管
+
+使用[some-time-later](https://github.com/ctrlcctrlv/some-time-later)字體
