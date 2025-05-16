@@ -3,661 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>海綿寶寶圖庫 | 搜尋與探索</title>
+    <meta name="description" content="海綿寶寶搜尋引擎，提供多種搜尋選項和隨機圖片功能。">
+    <meta name="keywords" content="海綿寶寶, 搜尋引擎, 圖片搜尋, 隨機圖片"> 
+    <link rel="icon" href="https://spongebob.potatomatoyota.workers.dev/favicon.ico" type="image/x-icon">   
+    <title>海綿寶寶搜尋引擎</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600&display=swap" rel="stylesheet">
     
+    <link rel="stylesheet" href="css/style.css">
+
+
     <style>
-        :root {
-            --primary: #FFC107;
-            --primary-dark: #FFA000;
-            --secondary: #03A9F4;
-            --dark: #263238;
-            --light: #ECEFF1;
-            --text: #37474F;
-            --text-light: #78909C;
-            --success: #4CAF50;
-            --error: #F44336;
-            --shadow-sm: 0 2px 6px rgba(0,0,0,0.08);
-            --shadow-md: 0 4px 12px rgba(0,0,0,0.12);
-            --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-            --radius: 12px;
-            --radius-sm: 6px;
-            --bg-color: #f8f9fa;
-            --card-bg: #ffffff;
-            --border-color: #E0E0E0;
-            --modal-bg: rgba(0, 0, 0, 0.85);
-            --search-bg: linear-gradient(to right, rgba(255,255,255,0.9), rgba(255,255,255,0.95));
-            --toggle-bg: #CFD8DC;
-        }
-
-        /* 深色模式變數 */
-        [data-theme="dark"] {
-            --primary: #e9b200;
-            --primary-dark: #FFCA28;
-            --secondary: #29B6F6;
-            --dark: #ECEFF1;
-            --light: #263238;
-            --text: #E0E0E0;
-            --text-light: #90A4AE;
-            --bg-color: #121212;
-            --card-bg: #1E1E1E;
-            --border-color: #424242;
-            --shadow-sm: 0 2px 6px rgba(0,0,0,0.2);
-            --shadow-md: 0 4px 12px rgba(0,0,0,0.25);
-            --modal-bg: rgba(0, 0, 0, 0.95);
-            --search-bg: linear-gradient(to right, rgba(42,42,42,0.9), rgba(42,42,42,0.95));
-            --toggle-bg: #455A64;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Noto Sans TC', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text);
-            line-height: 1.6;
-            min-height: 100vh;
-            transition: background-color 0.3s ease, color 0.3s ease;
-        }
-
-        .container {
-            max-width: 1280px;
-            margin: 0 auto;
-            padding: 1.5rem;
-        }
-
-        #searchWrapper {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 70vh;
-            transition: var(--transition);
-            position: relative;
-        }
-
-        #searchWrapper.pinned-top {
-            justify-content: flex-start;
-            padding-top: 2rem;
-            min-height: auto;
-            margin-bottom: 2rem;
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 2rem;
-            transition: var(--transition);
-        }
-
-        .search-area {
-            width: 100%;
-            max-width: 680px;
-            margin: 0 auto;
-        }
-
-        .search-container {
-            display: flex;
-            background: var(--card-bg);  
-            border-radius: 24px;  
-            border: 1px solid var(--border-color);  
-            box-shadow: 0 1px 6px rgba(32,33,36,0.08);  
-            padding: 4px;
-            height: 46px;  
-            transition: all 0.3s ease;
-            margin-bottom: 1rem;
-            position: relative;
-            overflow: hidden;
-            align-items: center;
-        }
-
-
-        .search-container:hover,
-        .search-container:focus-within {
-            box-shadow: 0 1px 6px rgba(32,33,36,0.2); 
-            border-color: rgba(223,225,229,0);  
-            transform: none;  
-        }
-
-        .search-container:before {
-             display: none;
-        }
-
-        .search-container:focus-within:before {
-            opacity: 1;
-        }
-
-        .search-input {
-            flex: 1;
-            border: none;
-            font-size: 16px;
-            outline: none;
-            color: var(--text);
-            min-width: 0;
-            padding: 0 20px;
-            font-family: inherit;
-            background: transparent;
-            letter-spacing: 0.5px;
-        }
-
-        .search-input::placeholder {
-            color: var(--text-light);
-            opacity: 0.7;
-            transition: opacity 0.3s ease;
-        }
-
-        .search-input:focus::placeholder {
-            opacity: 0.4;
-        }
-
-        .search-button {
-            background: transparent;  
-            border: none;
-            padding: 0 16px;
-            font-weight: normal;  
-            font-size: 15px;
-            color: var(--text-light); 
-            border-radius: 0;  
-            height: 48px; 
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            box-shadow: none; 
-            margin: 0 2px;
-        }
-
-        .search-button:hover {
-            background: transparent; 
-            transform: none; 
-            box-shadow: none;  
-            color: var(--text);  
-        }
-
-
-        .search-button .icon {
-            transition: transform 0.3s ease;
-            fill: var(--text-light);
-        }
-
-        .search-button:hover .icon {
-            
-            transform: none;  
-            fill: var(--text);
-        }
-
-        .button-group {
-            display: flex;
-            justify-content: center;
-            gap: 12px;
-            margin: 1rem 0;
-        }
-
-        .option-button {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 26px;
-            padding: 10px 16px;
-            font-size: 14px;
-            color: var(--text);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: var(--transition);
-            height: 42px;
-            box-shadow: var(--shadow-sm);
-        }
-
-        .option-button:hover {
-            background: var(--light);
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
-        }
-
-        .option-button svg {
-            width: 18px;
-            height: 18px;
-            fill: var(--text-light);
-        }
-
-        .advanced-options {
-            background: var(--card-bg);
-            border-radius: var(--radius);
-            padding: 1.5rem;
-            margin-top: 1rem;
-            box-shadow: var(--shadow-md);
-            display: none;
-            width: 100%;
-            animation: slideDown 0.3s ease;
-        }
-
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .advanced-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.2rem;
-            padding-bottom: 0.8rem;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .advanced-header span {
-            font-weight: 600;
-            font-size: 16px;
-            color: var(--text);
-        }
-
-        .options-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 1.2rem;
-            margin-bottom: 1.2rem;
-        }
-
-        .option-group {
-            margin-bottom: 1rem;
-        }
-
-        .option-label {
-            display: block;
-            font-weight: 500;
-            margin-bottom: 0.4rem;
-            color: var(--text);
-            font-size: 14px;
-        }
-
-        .option-description {
-            font-size: 13px;
-            color: var(--text-light);
-            margin-bottom: 0.5rem;
-        }
-
-        .option-select, .option-input {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-sm);
-            font-family: inherit;
-            font-size: 14px;
-            background: var(--card-bg);
-            transition: border 0.2s;
-            color: var(--text);
-        }
-
-        .option-select:focus, .option-input:focus {
-            border-color: var(--secondary);
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(3, 169, 244, 0.1);
-        }
-
-        .toggle-label {
-            display: flex;
-            align-items: center;
-            cursor: pointer;
-        }
-
-        .toggle-container {
-            position: relative;
-            width: 44px;
-            height: 22px;
-            margin-right: 12px;
-        }
-
-        .toggle-input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .toggle-slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: var(--toggle-bg);
-            transition: .3s;
-            border-radius: 22px;
-        }
-
-        .toggle-slider:before {
-            position: absolute;
-            content: "";
-            height: 18px;
-            width: 18px;
-            left: 2px;
-            bottom: 2px;
-            background-color: white;
-            transition: .3s;
-            border-radius: 50%;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-        }
-
-        .toggle-input:checked + .toggle-slider {
-            background-color: var(--secondary);
-        }
-
-        .toggle-input:checked + .toggle-slider:before {
-            transform: translateX(22px);
-        }
-
-        .error-message {
-            background: #FFEBEE;
-            color: var(--error);
-            padding: 12px 16px;
-            border-radius: var(--radius);
-            text-align: center;
-            margin: 1rem auto;
-            max-width: 680px;
-            display: none;
-            font-size: 14px;
-            animation: fadeIn 0.3s ease;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        .loading {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            margin: 2rem 0;
-            display: none;
-        }
-
-        .loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid rgba(3, 169, 244, 0.2);
-            border-top: 3px solid var(--secondary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 1rem;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .results-container {
-            max-width: 1200px;
-            margin: 2rem auto 0;
-        }
-
-        .results-summary {
-            text-align: center;
-            margin-bottom: 1.5rem;
-            color: var(--text-light);
-            font-size: 15px;
-            animation: fadeIn 0.5s ease;
-        }
-
-        .results-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-            gap: 16px;
-            animation: fadeInUp 0.5s ease;
-        }
-
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .grid-item {
-            border-radius: var(--radius);
-            overflow: hidden;
-            background: var(--card-bg);
-            box-shadow: var(--shadow-sm);
-            transition: var(--transition);
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .grid-item:hover {
-            transform: translateY(-4px);
-            box-shadow: var(--shadow-md);
-        }
-
-        .grid-item img {
-            width: 100%;
-            height: 180px;
-            object-fit: cover;
-            display: block;
-            cursor: pointer;
-            transition: transform 0.3s ease;
-        }
-
-        .grid-item:hover img {
-            transform: scale(1.05);
-        }
-
-        .grid-info {
-            padding: 12px 14px;
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .grid-code {
-            font-weight: 600;
-            margin-bottom: 4px;
-            color: var(--text);
-            font-size: 14px;
-        }
-
-        .grid-text {
-            font-size: 13px;
-            color: var(--text-light);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            flex-grow: 1;
-        }
-
-        .image-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: var(--modal-bg);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            backdrop-filter: blur(8px);
-        }
-
-        .modal-content {
-            position: relative;
-            max-width: 90%;
-            max-height: 90%;
-            animation: zoomIn 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
-        }
-
-        @keyframes zoomIn {
-            from { transform: scale(0.8); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
-        }
-
-        .modal-image {
-            max-width: 100%;
-            max-height: 80vh;
-            border-radius: var(--radius);
-            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3);
-        }
-
-        .modal-close {
-            position: absolute;
-            top: -50px;
-            right: -10px;
-            color: white;
-            font-size: 32px;
-            cursor: pointer;
-            width: 44px;
-            height: 44px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            border-radius: 50%;
-            background-color: rgba(255, 255, 255, 0.15);
-            transition: var(--transition);
-        }
-
-        .modal-close:hover {
-            background-color: rgba(255, 255, 255, 0.3);
-            transform: scale(1.1) rotate(90deg);
-        }
-
-        .modal-info {
-            color: white;
-            text-align: center;
-            margin-top: 20px;
-            font-size: 16px;
-            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-            max-width: 80vw;
-        }
-
-        /* 按鈕中的圖標 */
-        .icon {
-            width: 18px;
-            height: 18px;
-            fill: currentColor;
-        }
-
-        /* 底部的浮動按鈕 */
-        .fab {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            background: var(--primary);
-            color: var(--dark);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: var(--shadow-md);
-            cursor: pointer;
-            transition: var(--transition);
-            z-index: 100;
-            border: none;
-        }
-
-        .fab:hover {
-            transform: scale(1.1);
-            background: var(--primary-dark);
-            box-shadow: 0 6px 16px rgba(0,0,0,0.15);
-        }
+       @font-face {
+            font-family: 'some_time_laterregular';
+            src: url('font/some_time_later-webfont.woff2') format('woff2'),
+                    url('font/some_time_later-webfont.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
 
-        .fab svg {
-            width: 24px;
-            height: 24px;
         }
 
-        #scrollTop {
-            display: none;
-        }
-
-        /* 主題切換按鈕樣式 */
-        .theme-switch {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 100;
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            background: var(--card-bg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: var(--shadow-sm);
-            cursor: pointer;
-            border: 1px solid var(--border-color);
-            transition: var(--transition);
-        }
-
-        .theme-switch:hover {
-            transform: scale(1.1);
-            box-shadow: var(--shadow-md);
-        }
-
-        .theme-icon {
-            width: 24px;
-            height: 24px;
-            fill: var(--text);
-            transition: var(--transition);
-        }
-
-        @media (max-width: 768px) {
-            .search-area {
-                max-width: 95%;
-            }
-            
-            .options-grid {
-                grid-template-columns: 1fr;
-                gap: 1rem;
-            }
-            
-            .results-grid {
-                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-                gap: 12px;
-            }
-            
-            .grid-item img {
-                height: 150px;
-            }
-            
-            .button-group {
-                flex-wrap: wrap;
-            }
-            
-            .option-button {
-                padding: 8px 12px;
-                font-size: 13px;
-            }
-            
-            .search-container {
-                height: 50px;
-            }
-            
-            .search-button {
-                height: 42px;
-                padding: 0 16px;
-            }
-            
-            .theme-switch {
-                top: 10px;
-                right: 10px;
-                width: 40px;
-                height: 40px;
-            }
-        }
     </style>
 </head>
 <body>
-    <button class="theme-switch" id="themeSwitch">
+    <button class="theme-switch" id="themeSwitch" title="切換主題">
         <svg class="theme-icon" id="themeIcon" viewBox="0 0 24 24">
             <!-- 預設顯示月亮圖標 (切換到深色模式) -->
             <path id="moonPath" d="M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36c-0.98,1.37-2.58,2.26-4.4,2.26 c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z" style="display:block;"/>
@@ -669,7 +39,7 @@
         <div id="searchWrapper">
             <div class="header">
                 
-                <h1>海綿寶寶圖庫</h1>
+                <h1 id="logo" class="logo">Sponge Search</h1>
             </div>
             <div class="search-area">
                 <div class="search-container">
@@ -747,7 +117,7 @@
     </div>
     
     <!-- 回到頂部按鈕 -->
-    <button class="fab" id="scrollTop">
+    <button class="fab" id="scrollTop" title="回到頂部">
         <svg viewBox="0 0 24 24">
             <path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/>
         </svg>
@@ -934,8 +304,10 @@
         // 儲存當前設置
         saveSettings();
         
-        // 設置搜尋框位置
-        searchWrapper.classList.add('pinned-top');
+        // 先隱藏任何錯誤訊息
+        errorMessage.style.display = 'none';
+        
+        // 顯示載入中狀態
         showLoading();
         resultsContainer.innerHTML = '';
         
@@ -960,12 +332,15 @@
         }
         
         try {
-            // 如果是直接連結模式且限制為1，需要特殊處理
+            // 如果是直接連結模式且限制為1，特殊處理：直接開啟連結並保持搜尋框位置不變
             if (dir && limit === 1) {
                 window.open(url, '_blank');
                 hideLoading();
-                return;
+                return; // 重要：直接返回，不要移動搜尋框
             }
+            
+            // 設置搜尋框位置 - 只有當不是直接連結模式時才移動搜尋框
+            searchWrapper.classList.add('pinned-top');
             
             const response = await fetch(url);
             
@@ -987,23 +362,30 @@
                 const blob = await response.blob();
                 const imageUrl = URL.createObjectURL(blob);
                 
-                // 從回應標頭獲取圖片標題（如果有）
-                let imageTitle = "搜尋結果";
+                // 從回應標頭獲取圖片編號和標題
+                let imageCode = query;
+                let imageText = "搜尋結果";
+                
+                // 嘗試從回應標頭獲取圖片編號
+                const codeHeader = response.headers.get('x-image-code');
+                if (codeHeader) {
+                    imageCode = codeHeader;
+                }
                 
                 // 嘗試從回應標頭獲取圖片標題
                 const titleHeader = response.headers.get('x-image-text');
                 if (titleHeader) {
-                    imageTitle = decodeURIComponent(decodeURIComponent(titleHeader));
+                    imageText = decodeURIComponent(decodeURIComponent(titleHeader));
                 }
                 
                 resultsContainer.innerHTML = `
                     <div class="results-summary">找到 1 張圖片</div>
                     <div class="single-image-container">
-                        <div class="grid-item" style="max-width: 600px; margin: 0 auto;">
-                            <img src="${imageUrl}" alt="${imageTitle}" loading="eager">
+                        <div class="grid-item single-item" data-code="${imageCode}" data-text="${imageText}" style="max-width: 90%; margin: 0 auto;">
+                            <img src="${imageUrl}" alt="${imageText}" loading="eager" style="max-width: 100%; height: auto; object-fit: contain;">
                             <div class="grid-info">
-                                <div class="grid-code">${query}</div>
-                                <div class="grid-text">${imageTitle}</div>
+                                <div class="grid-code">${imageCode}</div>
+                                <div class="grid-text">${imageText}</div>
                             </div>
                         </div>
                     </div>
@@ -1170,15 +552,12 @@
     }
     
     // 取得隨機圖片
-    async function getRandomImage() {
+   async function getRandomImage() {
         showLoading();
         resultsContainer.innerHTML = '';
         
         // 儲存當前設置
         saveSettings();
-        
-        // 設置搜尋框位置
-        searchWrapper.classList.add('pinned-top');
         
         const limit = parseInt(limitInput.value, 10) || 50;
         const dir = directLinkCheckbox.checked;
@@ -1187,11 +566,15 @@
         currentQuery = '隨機圖片'; // 設置當前查詢為隨機圖片
         
         try {
+            // 如果是直接連結模式且限制為1，特殊處理：直接開啟連結並保持搜尋框位置不變
             if (dir && limit === 1) {
                 window.open(url, '_blank');
                 hideLoading();
-                return;
+                return; // 重要：直接返回，不要移動搜尋框
             }
+            
+            // 設置搜尋框位置 - 只有不是直接連結模式時才移動
+            searchWrapper.classList.add('pinned-top');
             
             const response = await fetch(url);
             
@@ -1209,15 +592,32 @@
                 const blob = await response.blob();
                 const imageUrl = URL.createObjectURL(blob);
                 
+                // 從回應標頭獲取圖片編號和標題
+                let imageCode = "隨機圖片";
+                let imageText = "隨機海綿寶寶圖片";
+                
+                // 嘗試從回應標頭獲取圖片編號
+                const codeHeader = response.headers.get('x-image-code');
+                if (codeHeader) {
+                    imageCode = codeHeader;
+                }
+                
+                // 嘗試從回應標頭獲取圖片標題
+                const titleHeader = response.headers.get('x-image-text');
+                if (titleHeader) {
+                    imageText = decodeURIComponent(decodeURIComponent(titleHeader));
+                }
+                
+                
                 resultsContainer.innerHTML = `
-                    <div class="results-summary">隨機海綿寶寶圖片</div>
+                    <div class="results-summary">隨機圖片</div>
                     <div class="single-image-container">
-                        <div class="grid-item" style="max-width: 500px; margin: 0 auto;">
-                            <img src="${imageUrl}" alt="隨機圖片" loading="eager">
+                        <div class="grid-item single-item" data-code="${imageCode}" data-text="${imageText}" style="max-width: 90%; margin: 0 auto;">
+                            <img src="${imageUrl}" alt="${imageText}" loading="eager" style="max-width: 100%; height: auto; object-fit: contain;">
                             <div class="grid-info">
-                                <div class="grid-code">隨機圖片</div>
-                                <div class="grid-text">隨機海綿寶寶圖片</div>
-                            </div>
+                                <div class="grid-code">${imageCode}</div>
+                                <div class="grid-text">${imageText}</div>
+                            </div> 
                         </div>
                     </div>
                 `;
@@ -1245,7 +645,6 @@
             hideLoading();
         }
     }
-    
     // 處理圖片點擊事件
     function handleImageClick(e) {
         
@@ -1329,6 +728,26 @@
     
     // 初始化應用
     document.addEventListener('DOMContentLoaded', init);
+
+    
+    const colors = [
+        '#f44336', '#e91e63', '#9c27b0', '#3f51b5', '#2196f3',
+        '#009688', '#4caf50', '#ffc107', '#ff5722', '#795548',
+        '#00bcd4', '#8bc34a', '#ff9800', '#673ab7'
+    ];
+
+    const logo = document.getElementById('logo');
+    const text = logo.textContent;
+    logo.innerHTML = ''; // 清空原文字
+
+    [...text].forEach((char, i) => {
+        const span = document.createElement('span');
+        span.textContent = char;
+        span.style.color = colors[i % colors.length];
+        logo.appendChild(span);
+    });
+
+
     </script>
 </body>
 </html>
