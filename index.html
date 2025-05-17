@@ -151,17 +151,42 @@
     let currentQuery = '';
 
     
+    const colorModeColors = [
+        '#f44336', '#e91e63', '#9c27b0', '#3f51b5', '#2196f3',
+        '#009688', '#4caf50', '#ffc107', '#ff5722', '#795548',
+        '#00bcd4', '#8bc34a', '#ff9800', '#673ab7'
+    ];
+
+    const darkModeColors = Array(14).fill('#FFFFFF'); // 深色模式下全部使用白色
+
+    const logo = document.getElementById('logo');
+    const text = logo.textContent;
+    logo.innerHTML = ''; // 清空原文字
+
+    // 創建logo文字元素
+    [...text].forEach((char, i) => {
+        const span = document.createElement('span');
+        span.textContent = char;
+        span.className = 'logo-char'; // 添加類名以便後續選擇
+        span.style.color = colorModeColors[i % colorModeColors.length];
+        logo.appendChild(span);
+    });
+
+    // 更新logo顏色的函數
+    function updateLogoColors(isDarkMode) {
+        const logoChars = document.querySelectorAll('.logo-char');
+        const colors = isDarkMode ? darkModeColors : colorModeColors;
         
-        
-    // 檢查本地保存的主題偏好
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') {
-        document.documentElement.setAttribute('data-theme', 'dark');
-           moonPath.style.display = 'none';
-           sunPath.style.display = 'block';
+        logoChars.forEach((span, i) => {
+            span.style.color = colors[i % colors.length];
+        });
     }
-        
-    // 監聽主題切換按鈕點擊
+
+    // 初始化logo顏色
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    updateLogoColors(currentTheme === 'dark');
+
+    // 在主題切換按鈕的事件處理函數中添加logo顏色更新
     themeSwitch.addEventListener('click', () => {
         // 檢查當前主題
         const currentTheme = document.documentElement.getAttribute('data-theme');
@@ -172,21 +197,24 @@
             localStorage.setItem('theme', 'light');
             moonPath.style.display = 'block';
             sunPath.style.display = 'none';
+            updateLogoColors(false); // 更新為彩色logo
         } else {
             // 切換到深色模式
             document.documentElement.setAttribute('data-theme', 'dark');
             localStorage.setItem('theme', 'dark');
             moonPath.style.display = 'none';
             sunPath.style.display = 'block';
+            updateLogoColors(true); // 更新為白色logo
         }
     });
-    
-    // 檢測系統深色模式偏好（首次訪問時）
-    if (!savedTheme) {
+
+    // 對系統主題變化的監聽也需要更新
+    if (!localStorage.getItem('theme')) {
         if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
             document.documentElement.setAttribute('data-theme', 'dark');
             moonPath.style.display = 'none';
             sunPath.style.display = 'block';
+            updateLogoColors(true); // 初始化為白色logo
         }
         
         // 監聽系統主題變化
@@ -195,13 +223,15 @@
                 document.documentElement.setAttribute('data-theme', 'dark');
                 moonPath.style.display = 'none';
                 sunPath.style.display = 'block';
+                updateLogoColors(true); // 更新為白色logo
             } else {
                 document.documentElement.removeAttribute('data-theme');
                 moonPath.style.display = 'block';
                 sunPath.style.display = 'none';
+                updateLogoColors(false); // 更新為彩色logo
             }
         });
-    }    
+    }
       
       // 初始化
     function init() {
@@ -742,22 +772,7 @@
     document.addEventListener('DOMContentLoaded', init);
 
     
-    const colors = [
-        '#f44336', '#e91e63', '#9c27b0', '#3f51b5', '#2196f3',
-        '#009688', '#4caf50', '#ffc107', '#ff5722', '#795548',
-        '#00bcd4', '#8bc34a', '#ff9800', '#673ab7'
-    ];
-
-    const logo = document.getElementById('logo');
-    const text = logo.textContent;
-    logo.innerHTML = ''; // 清空原文字
-
-    [...text].forEach((char, i) => {
-        const span = document.createElement('span');
-        span.textContent = char;
-        span.style.color = colors[i % colors.length];
-        logo.appendChild(span);
-    });
+   
 
     function getUrlParams() {
     const params = {};
