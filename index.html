@@ -231,6 +231,8 @@
         
         // 點擊圖片處理
         document.addEventListener('click', handleImageClick);
+
+        handleUrlParams();
     }
     
     // 載入儲存的設置
@@ -303,6 +305,13 @@
         
         // 儲存當前設置
         saveSettings();
+        
+        // 更新 URL
+        updateUrlWithSearch(query, {
+            fuzzy: fuzzyLevel.value,
+            limit: limitInput.value,
+            direct: directLinkCheckbox.checked ? '1' : '0'
+        });
         
         // 先隱藏任何錯誤訊息
         errorMessage.style.display = 'none';
@@ -553,6 +562,12 @@
     
     // 取得隨機圖片
    async function getRandomImage() {
+        // 更新 URL
+        updateUrlWithSearch('', {
+            random: true,
+            limit: limitInput.value,
+            direct: directLinkCheckbox.checked ? '1' : '0'
+        });
         showLoading();
         resultsContainer.innerHTML = '';
         
@@ -747,6 +762,90 @@
         logo.appendChild(span);
     });
 
+    function getUrlParams() {
+    const params = {};
+    const searchParams = new URLSearchParams(window.location.search);
+    for (const [key, value] of searchParams) {
+        params[key] = value;
+    }
+    return params;
+}
+
+    // 更新 URL 的函數
+    function updateUrlWithSearch(query, options = {}) {
+        const url = new URL(window.location);
+        
+        // 清除舊參數
+        url.search = '';
+        
+        // 添加搜尋參數
+        if (query) url.searchParams.set('q', query);
+        
+        // 添加選項參數
+        if (options.fuzzy) url.searchParams.set('f', options.fuzzy);
+        if (options.limit) url.searchParams.set('limit', options.limit);
+        if (options.direct) url.searchParams.set('dir', options.direct);
+        if (options.random) url.searchParams.set('random', '1');
+        
+        // 更新 URL 而不重新加載頁面
+        window.history.pushState({
+            query,
+            options
+        }, '', url);
+    }
+    // 頁面載入時處理 URL 參數
+function handleUrlParams() {
+    const params = getUrlParams();
+    
+    // 如果有搜尋參數，執行搜尋
+    if (params.q) {
+        searchInput.value = params.q;
+        
+        // 設置選項
+        if (params.f) fuzzyLevel.value = params.f;
+        if (params.limit) limitInput.value = params.limit;
+        if (params.dir) directLinkCheckbox.checked = params.dir === '1';
+        
+        // 執行搜尋
+        performSearch();
+    } 
+    // 如果是隨機模式
+    else if (params.random) {
+        // 設置選項
+        if (params.limit) limitInput.value = params.limit;
+        if (params.dir) directLinkCheckbox.checked = params.dir === '1';
+        
+        // 獲取隨機圖片
+        getRandomImage();
+    }
+}
+
+// 處理瀏覽器前進/後退按鈕
+window.addEventListener('popstate', (event) => {
+    if (event.state) {
+        const { query, options } = event.state;
+        
+        // 恢復搜尋框和選項
+        searchInput.value = query || '';
+        
+        if (options) {
+            if (options.fuzzy) fuzzyLevel.value = options.fuzzy;
+            if (options.limit) limitInput.value = options.limit;
+            if (options.direct) directLinkCheckbox.checked = options.direct === '1';
+        }
+        
+        // 根據狀態執行搜尋
+        if (query) {
+            performSearch();
+        } else if (options && options.random) {
+            getRandomImage();
+        }
+    } else {
+        // 如果沒有狀態，清空結果區域
+        resultsContainer.innerHTML = '';
+        searchWrapper.classList.remove('pinned-top');
+    }
+});
 
     </script>
 </body>
