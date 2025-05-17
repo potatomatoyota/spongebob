@@ -1,12 +1,12 @@
 const BASE_URL = "https://github.com/potatomatoyota/spongebobimage/raw/master/";
 const INDEX_URL = "https://raw.githubusercontent.com/potatomatoyota/spongebob/refs/heads/main/index.json";
 
-const MAX_ALLOWED_LIMIT = 5000; // 允許的最大結果數
-const DEBUG_RESULTS_LIMIT = 50; // 調試模式下顯示的最大結果數
+const MAX_ALLOWED_LIMIT = 10000; // 允許的最大結果數
+const DEBUG_RESULTS_LIMIT = 99999; // 調試模式下顯示的最大結果數
 
 let index = null;
 
-// 修正過的 CORS 處理函數，避免對中文進行重複編碼
+// 修正過的 CORS 處理函數，正確處理中文編碼
 function withCORS(body, status = 200, headers = {}) {
   const defaultHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -15,11 +15,12 @@ function withCORS(body, status = 200, headers = {}) {
     "Access-Control-Max-Age": "86400"
   };
   
-  // 直接保留原始標頭值，不進行編碼
-  const combinedHeaders = { ...defaultHeaders, ...headers };
+ 
+  const processedHeaders = { ...defaultHeaders, ...headers };
+
   return new Response(body, { 
     status, 
-    headers: new Headers(combinedHeaders)
+    headers: new Headers(processedHeaders)
   });
 }
 
@@ -70,28 +71,13 @@ export default {
 
     try {
       const response = await handleRequest(request);
-
-      // 處理重定向，確保不重複編碼中文標頭
-      if (response.status >= 300 && response.status < 400) {
-        const imageCode = response.headers.get("X-Image-Code") || "";
-        const imageText = response.headers.get("X-Image-Text") || "";
-        
-        const redirectUrl = response.headers.get("Location");
-        // 使用標準的重定向方法，不傳入第三個參數
-        const redirectResponse = Response.redirect(redirectUrl, 302);
-        // 手動將標頭添加到重定向響應
-        redirectResponse.headers.set("X-Image-Code", imageCode);
-        redirectResponse.headers.set("X-Image-Text", imageText);
-        redirectResponse.headers.set("Access-Control-Allow-Origin", "*");
-        redirectResponse.headers.set("Access-Control-Expose-Headers", "X-Image-Code, X-Image-Text");
-        return redirectResponse;
-      }
-
+      
       return withCORS(response.body, response.status, {
         "Content-Type": response.headers.get("Content-Type") || "application/json",
         "X-Image-Code": response.headers.get("X-Image-Code") || "",
-        "X-Image-Text": response.headers.get("X-Image-Text") || "",  // 保留原始值，不再編碼
-        "Access-Control-Expose-Headers": "X-Image-Code, X-Image-Text"
+        "X-Image-Text": response.headers.get("X-Image-Text") || "",
+        "Access-Control-Expose-Headers": "X-Image-Code, X-Image-Text",
+        "Location": response.headers.get("Location") || ""
       });
     } catch (error) {
       return withCORS(JSON.stringify({ error: error.message }), 500, {
@@ -100,20 +86,6 @@ export default {
     }
   }
 };
-
-// 修正後的標頭添加函數，確保中文文本只編碼一次
-function addImageHeaders(response, code, text) {
-  const newHeaders = new Headers(response.headers);
-  newHeaders.set("X-Image-Code", code);
-  newHeaders.set("X-Image-Text", text);  // 直接使用原始文本，不編碼
-  newHeaders.set("Access-Control-Expose-Headers", "X-Image-Code, X-Image-Text");
-  
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: newHeaders
-  });
-}
 
 async function handleRequest(request) {
   const url = new URL(request.url);
@@ -187,20 +159,24 @@ async function handleRequest(request) {
             headers: { 
               "Content-Type": "application/json",
               "X-Image-Code": exactMatch.code,
-              "X-Image-Text": exactMatch.text  // 不編碼
+              "X-Image-Text": encodeURIComponent(exactMatch.text)
             }
           });
         }
         
         const imageUrl = `${buildImageUrl(exactMatch.code, exactMatch.text)}?t=${Date.now()}`;
         
-        // 如果dir=true，直接重定向到圖片URL
+        // 修正: 如果dir=true，創建自定義重定向響應
         if (dir) {
-          // 使用標準的重定向方法，然後添加標頭
-          const redirectResponse = Response.redirect(imageUrl, 302);
-          redirectResponse.headers.set("X-Image-Code", exactMatch.code);
-          redirectResponse.headers.set("X-Image-Text", exactMatch.text);
-          return redirectResponse;
+          // 不再使用 Response.redirect，而是創建自定義響應
+          return new Response(null, {
+            status: 302,
+            headers: {
+              "Location": imageUrl,
+              "X-Image-Code": exactMatch.code,
+              "X-Image-Text": encodeURIComponent(exactMatch.text)
+            }
+          });
         }
         
         const imageRes = await fetch(imageUrl);
@@ -208,16 +184,14 @@ async function handleRequest(request) {
           return new Response("Image fetch failed", { status: 502 });
         }
         
-        // 添加圖片資訊到標頭，不編碼中文
-        const headers = new Headers({
-          "Content-Type": imageRes.headers.get("Content-Type") || "image/jpeg",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          "X-Image-Code": exactMatch.code,
-          "X-Image-Text": exactMatch.text,  // 不編碼
-          "Access-Control-Expose-Headers": "X-Image-Code, X-Image-Text"
+        return new Response(imageRes.body, {
+          headers: {
+            "Content-Type": imageRes.headers.get("Content-Type") || "image/jpeg",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "X-Image-Code": exactMatch.code,
+            "X-Image-Text": encodeURIComponent(exactMatch.text)
+          }
         });
-        
-        return new Response(imageRes.body, { headers });
       }
     }
   }
@@ -253,20 +227,24 @@ async function handleRequest(request) {
         headers: { 
           "Content-Type": "application/json",
           "X-Image-Code": exactMatch.code,
-          "X-Image-Text": exactMatch.text  // 不編碼
+          "X-Image-Text": encodeURIComponent(exactMatch.text)
         }
       });
     }
     
     const imageUrl = `${buildImageUrl(exactMatch.code, exactMatch.text)}?t=${Date.now()}`;
     
-    // 如果dir=true，直接重定向到圖片URL，並添加圖片資訊
+    // 修正: 如果dir=true，創建自定義重定向響應
     if (dir) {
-      // 使用標準的重定向方法，然後添加標頭
-      const redirectResponse = Response.redirect(imageUrl, 302);
-      redirectResponse.headers.set("X-Image-Code", exactMatch.code);
-      redirectResponse.headers.set("X-Image-Text", exactMatch.text);
-      return redirectResponse;
+      // 不再使用 Response.redirect，而是創建自定義響應
+      return new Response(null, {
+        status: 302,
+        headers: {
+          "Location": imageUrl,
+          "X-Image-Code": exactMatch.code,
+          "X-Image-Text": encodeURIComponent(exactMatch.text)
+        }
+      });
     }
     
     const imageRes = await fetch(imageUrl);
@@ -274,15 +252,14 @@ async function handleRequest(request) {
       return new Response("Image fetch failed", { status: 502 });
     }
     
-    // 添加圖片資訊到標頭，不編碼中文
-    const headers = new Headers({
-      "Content-Type": imageRes.headers.get("Content-Type") || "image/jpeg",
-      "Cache-Control": "no-cache, no-store, must-revalidate",
-      "X-Image-Code": exactMatch.code,
-      "X-Image-Text": exactMatch.text  // 不編碼
+    return new Response(imageRes.body, {
+      headers: {
+        "Content-Type": imageRes.headers.get("Content-Type") || "image/jpeg",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "X-Image-Code": exactMatch.code,
+        "X-Image-Text": encodeURIComponent(exactMatch.text)
+      }
     });
-    
-    return new Response(imageRes.body, { headers });
   }
 
   // 正常搜尋流程
@@ -357,17 +334,17 @@ async function handleRequest(request) {
     const chosen = results[0];
     const imageUrl = `${buildImageUrl(chosen.code, chosen.text)}?t=${Date.now()}`;
 
-    // 如果dir=true，直接重定向到圖片URL，並添加圖片資訊
+    // 修正: 如果dir=true，創建自定義重定向響應
     if (dir) {
-      // 更新：使用單次編碼
-      const imageCode = chosen.code;
-      const imageText = chosen.text;  // 不再進行額外的編碼
-      
-      // 使用標準的重定向方法，然後手動添加標頭
-      const redirectResponse = Response.redirect(imageUrl, 302);
-      redirectResponse.headers.set("X-Image-Code", chosen.code);
-      redirectResponse.headers.set("X-Image-Text", chosen.text);
-      return redirectResponse;
+      // 不再使用 Response.redirect，而是創建自定義響應
+      return new Response(null, {
+        status: 302,
+        headers: {
+          "Location": imageUrl,
+          "X-Image-Code": chosen.code,
+          "X-Image-Text": encodeURIComponent(chosen.text)
+        }
+      });
     }
 
     const imageRes = await fetch(imageUrl);
@@ -375,16 +352,14 @@ async function handleRequest(request) {
       return new Response("Image fetch failed", { status: 502 });
     }
 
-    // 添加圖片資訊到標頭，不編碼中文
-    const headers = new Headers({
-      "Content-Type": imageRes.headers.get("Content-Type") || "image/jpeg",
-      "Cache-Control": "no-cache, no-store, must-revalidate",
-      "X-Image-Code": chosen.code,
-      "X-Image-Text": chosen.text,  // 不編碼
-      "Access-Control-Expose-Headers": "X-Image-Code, X-Image-Text"
+    return new Response(imageRes.body, {
+      headers: {
+        "Content-Type": imageRes.headers.get("Content-Type") || "image/jpeg",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "X-Image-Code": chosen.code,
+        "X-Image-Text": encodeURIComponent(chosen.text)
+      }
     });
-    
-    return new Response(imageRes.body, { headers });
   }
 }
 
@@ -428,37 +403,35 @@ async function handleRandomImage(request) {
     });
   }
 
-  // dir=true -> 傳回第一張圖直接 redirect，並添加圖片資訊
+  // 修正: 如果dir=true
   if (dir) {
-    // 更新：使用單次編碼
-    const imageCode = selected[0].code;
-    const imageText = selected[0].text;  // 不編碼
     
-    // 使用標準的重定向方法，然後手動添加標頭
-    const redirectResponse = Response.redirect(selected[0].url, 302);
-    redirectResponse.headers.set("X-Image-Code", selected[0].code);
-    redirectResponse.headers.set("X-Image-Text", selected[0].text);
-    return redirectResponse;
+    return new Response(null, {
+      status: 302,
+      headers: {
+        "Location": selected[0].url,
+        "X-Image-Code": selected[0].code,
+        "X-Image-Text": encodeURIComponent(selected[0].text)
+      }
+    });
   }
 
   // 如果沒有明確設定 limit 參數，則直接返回圖片內容
-  if (!hasExplicitLimit) {
+  if (!hasExplicitLimit || limit === 1) {
     const imageUrl = selected[0].url;
     const imageRes = await fetch(imageUrl);
     if (!imageRes.ok) {
       return new Response("Image fetch failed", { status: 502 });
     }
-
-    // 添加圖片資訊到標頭，不編碼中文
-    const headers = new Headers({
-      "Content-Type": imageRes.headers.get("Content-Type") || "image/jpeg",
-      "Cache-Control": "no-cache, no-store, must-revalidate",
-      "X-Image-Code": selected[0].code,
-      "X-Image-Text": selected[0].text,  // 不編碼
-      "Access-Control-Expose-Headers": "X-Image-Code, X-Image-Text"
+  
+    return new Response(imageRes.body, {
+      headers: {
+        "Content-Type": imageRes.headers.get("Content-Type") || "image/jpeg",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "X-Image-Code": selected[0].code,
+        "X-Image-Text": encodeURIComponent(selected[0].text)
+      }
     });
-    
-    return new Response(imageRes.body, { headers });
   }
 
   // 有明確設定 limit 參數，則返回 JSON
@@ -469,8 +442,7 @@ async function handleRandomImage(request) {
   }), {
     headers: {
       "Content-Type": "application/json",
-      "Cache-Control": "no-cache, no-store, must-revalidate",
-      "Access-Control-Expose-Headers": "X-Image-Code, X-Image-Text"
+      "Cache-Control": "no-cache, no-store, must-revalidate"
     }
   });
 }

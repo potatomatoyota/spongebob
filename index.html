@@ -7,9 +7,6 @@
     <meta name="keywords" content="海綿寶寶, 搜尋引擎, 圖片搜尋, 隨機圖片"> 
     <link rel="icon" href="https://spongebob.potatomatoyota.workers.dev/favicon.ico" type="image/x-icon">   
     <title>海綿寶寶搜尋引擎</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600&display=swap" rel="stylesheet">
     
     <link rel="stylesheet" href="css/style.css">
 
@@ -75,7 +72,7 @@
                     <div class="advanced-content">
                         <div class="options-grid">
                             <div class="option-group">
-                                <label class="option-label">模糊匹配程度</label>
+                                <label class="option-label" for="fuzzyLevel">模糊匹配程度</label>
                                 <div class="option-description">控制搜尋時的匹配要求嚴格程度</div>
                                 <select class="option-select" id="fuzzyLevel">
                                     <option value="medium">中等 (包含連續子字串)</option>
@@ -87,7 +84,7 @@
                             <div class="option-group">
                                 <label class="option-label">結果數量</label>
                                 <div class="option-description">設定返回的圖片數量上限</div>
-                                <input type="number" class="option-input" id="limitInput" min="1" max="5000" value="50">
+                                <input type="number" class="option-input" id="limitInput" min="1" max="5000" value="50" placeholder="輸入數量 (1-10000)" title="設定返回的圖片數量上限">
                             </div>
                         </div>
                         
@@ -232,7 +229,7 @@
         // 點擊圖片處理
         document.addEventListener('click', handleImageClick);
 
-        handleUrlParams();
+         handleUrlParams();
     }
     
     // 載入儲存的設置
