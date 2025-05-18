@@ -150,7 +150,32 @@
     let totalResults = 0;
     let currentQuery = '';
 
-    
+    function applyStoredTheme() {
+        // 檢查本地存儲中是否有主題設置
+        const storedTheme = localStorage.getItem('theme');
+        
+        if (storedTheme === 'dark') {
+            // 應用深色模式
+            document.documentElement.setAttribute('data-theme', 'dark');
+            moonPath.style.display = 'none';
+            sunPath.style.display = 'block';
+            updateLogoColors(true); // 更新為白色logo
+        } else if (storedTheme === 'light') {
+            // 應用淺色模式
+            document.documentElement.removeAttribute('data-theme');
+            moonPath.style.display = 'block';
+            sunPath.style.display = 'none';
+            updateLogoColors(false); // 更新為彩色logo
+        } else {
+            // 沒有存儲的主題設置，檢查系統偏好
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                moonPath.style.display = 'none';
+                sunPath.style.display = 'block';
+                updateLogoColors(true); // 更新為白色logo
+            }
+        }
+    }
     const colorModeColors = [
         '#f44336', '#e91e63', '#9c27b0', '#3f51b5', '#2196f3',
         '#009688', '#4caf50', '#ffc107', '#ff5722', '#795548',
@@ -235,6 +260,8 @@
       
       // 初始化
     function init() {
+    
+        applyStoredTheme();
         // 註冊事件監聽器
         searchButton.addEventListener('click', performSearch);
         randomButton.addEventListener('click', getRandomImage);
