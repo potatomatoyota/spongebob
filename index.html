@@ -329,11 +329,20 @@
             }, 10);
         }
     }
-    
+    const LOADING_IMAGES = [
+        'loading/loading1.png',
+        'loading/loading2.png',
+        'loading/loading4.png',
+        'loading/loading5.png',
+    ];
     // 顯示載入中
     function showLoading() {
         loading.style.display = 'flex';
         errorMessage.style.display = 'none';
+    }
+    function getRandomLoadingImage() {
+        const randomIndex = Math.floor(Math.random() * LOADING_IMAGES.length);
+        return LOADING_IMAGES[randomIndex];
     }
     
     // 隱藏載入中
@@ -441,11 +450,14 @@
                     imageText = decodeURIComponent(decodeURIComponent(titleHeader));
                 }
                 
+                // 使用隨機loading圖片
+                const randomLoadingImage = getRandomLoadingImage();
+                
                 resultsContainer.innerHTML = `
                     <div class="results-summary">找到 1 張圖片</div>
                     <div class="single-image-container">
                         <div class="grid-item single-item" data-code="${imageCode}" data-text="${imageText}" style="max-width: 90%; margin: 0 auto;">
-                            <img src="${imageUrl}" alt="${imageText}" loading="eager" style="max-width: 100%; height: auto; object-fit: contain;">
+                            <img src="${randomLoadingImage}" data-src="${imageUrl}" alt="${imageText}" class="lazy-image" loading="eager" style="max-width: 100%; height: auto; object-fit: contain;">
                             <div class="grid-info">
                                 <div class="grid-code">${imageCode}</div>
                                 <div class="grid-text">${imageText}</div>
@@ -453,6 +465,15 @@
                         </div>
                     </div>
                 `;
+                
+                // 加載真實圖片
+                const img = document.querySelector('.single-item img');
+                const actualImage = new Image();
+                actualImage.onload = function() {
+                    img.src = imageUrl;
+                    img.classList.remove('lazy-image');
+                };
+                actualImage.src = imageUrl;
             } else {
                 // 顯示多張圖片
                 const data = await response.json();
@@ -510,7 +531,7 @@
         if (!append) {
             const summaryHTML = `
                 <div class="results-summary">
-                    找到 ${totalResults} 張圖片${currentQuery ? `，關鍵字「${currentQuery}」` : ''}
+                    找到 ${totalResults} 張圖片${currentQuery ? `` : ''}，顯示 ${actualTotalResults} 張圖片，關鍵字「${currentQuery}」
                 </div>
             `;
             resultsContainer.innerHTML = summaryHTML;
@@ -531,8 +552,11 @@
             gridItem.dataset.code = item.code;
             gridItem.dataset.text = item.text;
             
+            // 使用隨機loading圖片
+            const randomLoadingImage = getRandomLoadingImage();
+            
             gridItem.innerHTML = `
-                <img src="${item.url}" alt="${item.text}" loading="lazy">
+                <img src="${randomLoadingImage}" data-src="${item.url}" alt="${item.text}" loading="lazy" class="lazy-image">
                 <div class="grid-info">
                     <div class="grid-code">${item.code}</div>
                     <div class="grid-text">${item.text}</div>
@@ -540,6 +564,15 @@
             `;
             
             gridContainer.appendChild(gridItem);
+            
+            // 創建真實圖片並在加載完成後替換
+            const img = gridItem.querySelector('img');
+            const actualImage = new Image();
+            actualImage.onload = function() {
+                img.src = item.url;
+                img.classList.remove('lazy-image');
+            };
+            actualImage.src = item.url;
         });
         
         // 如果是首次加載，滾動到頂部
@@ -716,12 +749,12 @@
     }
     // 處理圖片點擊事件
     function handleImageClick(e) {
-        
         const img = e.target.closest('.grid-item img');
         if (!img) return;
         
         const gridItem = img.closest('.grid-item');
-        const imgSrc = img.src;
+        // 使用data-src屬性獲取真實圖片URL，如果沒有就使用src
+        const imgSrc = img.dataset.src || img.src;
         const imgCode = gridItem.dataset.code || 'Unknown';
         const imgText = gridItem.dataset.text || '海綿寶寶圖片';
         
@@ -734,10 +767,14 @@
         // 創建模態框
         const modal = document.createElement('div');
         modal.className = 'image-modal';
+        
+        // 使用隨機loading圖片
+        const randomLoadingImage = getRandomLoadingImage();
+        
         modal.innerHTML = `
             <div class="modal-content">
                 <span class="modal-close">&times;</span>
-                <img src="${imgSrc}" alt="${imgText}" class="modal-image">
+                <img src="${randomLoadingImage}" data-src="${imgSrc}" alt="${imgText}" class="modal-image lazy-image">
                 <div class="modal-info">
                     <strong>${imgCode}</strong>
                     <p>${imgText}</p>
@@ -752,6 +789,15 @@
         setTimeout(() => {
             modal.style.opacity = 1;
         }, 10);
+        
+        // 加載真實圖片
+        const img = modal.querySelector('.modal-image');
+        const actualImage = new Image();
+        actualImage.onload = function() {
+            img.src = imgSrc;
+            img.classList.remove('lazy-image');
+        };
+        actualImage.src = imgSrc;
         
         // 關閉模態框
         modal.addEventListener('click', (e) => {
@@ -768,6 +814,7 @@
             }
         });
     }
+
     
     // 關閉模態框
     function closeModal(modal) {
