@@ -1,497 +1,624 @@
-const BASE_URL = "https://github.com/potatomatoyota/spongebobimage/raw/master/";
-const INDEX_URL = "https://raw.githubusercontent.com/potatomatoyota/spongebob/refs/heads/main/index.json";
+const API_BASE_URL = 'https://spongebob.potatomatoyota.workers.dev';
 
-const MAX_ALLOWED_LIMIT = 10000; // 允許的最大結果數
-const DEBUG_RESULTS_LIMIT = 99999; // 調試模式下顯示的最大結果數
+// DOM elements
+const searchInput = document.getElementById('searchInput');
+const searchButton = document.getElementById('searchButton');
+const randomButton = document.getElementById('randomButton');
+const toggleAdvancedButton = document.getElementById('toggleAdvanced');
+const advancedOptions = document.getElementById('advancedOptions');
+const fuzzyLevel = document.getElementById('fuzzyLevel');
+const limitInput = document.getElementById('limitInput');
+const directLinkCheckbox = document.getElementById('directLinkCheckbox');
+const resultsContainer = document.getElementById('resultsContainer');
+const errorMessage = document.getElementById('errorMessage');
+const loading = document.getElementById('loading');
+const scrollTopButton = document.getElementById('scrollTop');
+const searchWrapper = document.getElementById('searchWrapper');
+const themeSwitch = document.getElementById('themeSwitch');
+const moonPath = document.getElementById('moonPath');
+const sunPath = document.getElementById('sunPath');
 
-let index = null;
+// Pagination variables
+let isLoading = false;
+let hasMoreResults = true;
+let itemsPerLoad = 30;
+let loadedCount = 0;
+let currentResults = [];
+let totalResults = 0;
+let currentQuery = '';
 
-// 修正過的 CORS 處理函數，正確處理中文編碼
-function withCORS(body, status = 200, headers = {}) {
-  const defaultHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Max-Age": "86400"
-  };
-  
- 
-  const processedHeaders = { ...defaultHeaders, ...headers };
 
-  return new Response(body, { 
-    status, 
-    headers: new Headers(processedHeaders)
-  });
-}
+const colorModeColors = [
+    '#f44336', '#e91e63', '#9c27b0', '#3f51b5', '#2196f3',
+    '#009688', '#4caf50', '#ffc107', '#ff5722', '#795548',
+    '#00bcd4', '#8bc34a', '#ff9800', '#673ab7'
+];
+const darkModeColors = Array(14).fill('#FFFFFF');
 
-export default {
-  async fetch(request) {
+function applyStoredTheme() {
+    const storedTheme = localStorage.getItem('theme');
     
-    if (new URL(request.url).pathname === "/favicon.ico") {
-      // 從外部URL加載favicon網址清單
-      const listUrl = "https://raw.githubusercontent.com/potatomatoyota/spongebob/refs/heads/main/URLlist.txt";
-      try {
-        const listRes = await fetch(listUrl);
-        if (!listRes.ok) {
-          throw new Error("無法獲取favicon URL列表");
-        }
-        
-        const content = await listRes.text();
-        const faviconUrls = content.split('\n').filter(url => url.trim().length > 0);
-        
-        if (faviconUrls.length === 0) {
-          throw new Error("favicon URL列表為空");
-        }
-        
-        // 隨機選擇一個網址
-        const randomIndex = Math.floor(Math.random() * faviconUrls.length);
-        const faviconUrl = faviconUrls[randomIndex];
-        
-        const faviconRes = await fetch(faviconUrl);
-        if (!faviconRes.ok) {
-          return withCORS("Favicon not found", 404, {
-            "Content-Type": "text/plain"
-          });
-        }
-
-        return withCORS(faviconRes.body, 200, {
-          "Content-Type": faviconRes.headers.get("Content-Type") || "image/x-icon",
-          "Cache-Control": "max-age=86400"
-        });
-      } catch (error) {
-        return withCORS(`Error: ${error.message}`, 500, {
-          "Content-Type": "text/plain"
-        });
-      }
-    }
-        
-    if (request.method === "OPTIONS") {
-      return withCORS(null);
-    }
-
-    try {
-      const response = await handleRequest(request);
-      
-      return withCORS(response.body, response.status, {
-        "Content-Type": response.headers.get("Content-Type") || "application/json",
-        "X-Image-Code": response.headers.get("X-Image-Code") || "",
-        "X-Image-Text": response.headers.get("X-Image-Text") || "",
-        "Access-Control-Expose-Headers": "X-Image-Code, X-Image-Text",
-        "Location": response.headers.get("Location") || ""
-      });
-    } catch (error) {
-      return withCORS(JSON.stringify({ error: error.message }), 500, {
-        "Content-Type": "application/json"
-      });
-    }
-  }
-};
-
-async function handleRequest(request) {
-  const url = new URL(request.url);
-  const path = url.pathname;
-
-  if (path === "/image" && url.searchParams.toString() === "") {
-    const fallbackUrl = new URL(request.url);
-    fallbackUrl.searchParams.set("random", "");
-    const fallbackRequest = new Request(fallbackUrl.toString(), request);
-    return await handleRandomImage(fallbackRequest);
-  }
-  
-  if (path === "/image" && url.searchParams.get("random") !== null) {
-    return await handleRandomImage(request);
-  }
-  
-  const search = url.searchParams.get("search");
-  
-  // 處理 f 參數，支持數字和字符串兩種格式
-  let f = url.searchParams.get("f") || "medium";
-  // 轉換數字格式: 0=loose, 1=medium, 2=strict
-  if (f === "0") f = "loose";
-  else if (f === "1") f = "medium";
-  else if (f === "2") f = "strict";
-  
-  const code = url.searchParams.get("code");
-  const debug = url.searchParams.get("debug") === "true";
-  const limit = parseInt(url.searchParams.get("limit") || "1", 10);
-  const dir = url.searchParams.get("dir") === "true";
-  
-  if (!search && !code) {
-    return new Response("用 search 或 code 或random 找圖好嗎", { status: 400 });
-  }
-
-  if (!index) {
-    const res = await fetch(INDEX_URL);
-    if (!res.ok) return new Response("Failed to load index", { status: 500 });
-    index = await res.json();
-  }
-
-  // 檢查search是否可能是編號
-  if (search) {
-    // 處理各種可能的編號格式
-    let normalizedCode = null;
-    
-    // 已經以SS開頭 (不區分大小寫)
-    if (/^ss\d+/i.test(search)) {
-      if (/^ss\d+$/i.test(search)) { // 純SS+數字
-        const numPart = search.replace(/^ss/i, "");
-        normalizedCode = "SS" + numPart.padStart(4, "0").toUpperCase();
-      } else {
-        normalizedCode = search.toUpperCase(); // 可能包含其他字符，直接大寫
-      }
-    } 
-    
-    // 如果解析出了可能的編號，嘗試精確匹配
-    if (normalizedCode) {
-      const exactMatch = index.find(item => item.code.toUpperCase() === normalizedCode);
-      
-      // 如果找到精確匹配，則按編號處理
-      if (exactMatch) {
-        if (debug) {
-          return new Response(JSON.stringify({
-            note: "搜尋被處理為編號匹配",
-            originalQuery: search,
-            normalizedCode: normalizedCode,
-            code: exactMatch.code,
-            text: exactMatch.text,
-            url: buildImageUrl(exactMatch.code, exactMatch.text)
-          }), {
-            headers: { 
-              "Content-Type": "application/json",
-              "X-Image-Code": exactMatch.code,
-              "X-Image-Text": encodeURIComponent(exactMatch.text)
-            }
-          });
-        }
-        
-        const imageUrl = `${buildImageUrl(exactMatch.code, exactMatch.text)}?t=${Date.now()}`;
-        
-        // 修正: 如果dir=true，創建自定義重定向響應
-        if (dir) {
-          // 不再使用 Response.redirect，而是創建自定義響應
-          return new Response(null, {
-            status: 302,
-            headers: {
-              "Location": imageUrl,
-              "X-Image-Code": exactMatch.code,
-              "X-Image-Text": encodeURIComponent(exactMatch.text)
-            }
-          });
-        }
-        
-        const imageRes = await fetch(imageUrl);
-        if (!imageRes.ok) {
-          return new Response("Image fetch failed", { status: 502 });
-        }
-        
-        return new Response(imageRes.body, {
-          headers: {
-            "Content-Type": imageRes.headers.get("Content-Type") || "image/jpeg",
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "X-Image-Code": exactMatch.code,
-            "X-Image-Text": encodeURIComponent(exactMatch.text)
-          }
-        });
-      }
-    }
-  }
-  
-  // 如果提供了代碼，直接查找
-  if (code) {
-    let normalizedCode;
-    
-    // 檢查code是否可能是編號
-    if (code.toUpperCase().startsWith("SS")) {
-      normalizedCode = code.toUpperCase();
+    if (storedTheme === 'dark' || (!storedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        moonPath.style.display = 'none';
+        sunPath.style.display = 'block';
+        updateLogoColors(true);
     } else {
-      // 檢查是否純數字，如果是則補零至4位數
-      if (/^\d+$/.test(code)) {
-        normalizedCode = "SS" + code.padStart(4, "0").toUpperCase();
-      } else {
-        // 其他情況直接添加SS前綴
-        normalizedCode = "SS" + code.toUpperCase();
-      }
+        document.documentElement.removeAttribute('data-theme');
+        moonPath.style.display = 'block';
+        sunPath.style.display = 'none';
+        updateLogoColors(false);
     }
+}
+
+function updateLogoColors(isDarkMode) {
+    const logoChars = document.querySelectorAll('.logo-char');
+    const colors = isDarkMode ? darkModeColors : colorModeColors;
     
-    const exactMatch = index.find(item => item.code.toUpperCase() === normalizedCode);
-    if (!exactMatch) {
-      return new Response(`我又不知道${code}是哪張圖`, { status: 404 });
+    logoChars.forEach((span, i) => {
+        span.style.color = colors[i % colors.length];
+    });
+}
+
+function setupLogo() {
+    const logo = document.getElementById('logo');
+    const text = logo.textContent;
+    logo.innerHTML = '';
+
+    [...text].forEach((char, i) => {
+        const span = document.createElement('span');
+        span.textContent = char;
+        span.className = 'logo-char';
+        span.style.color = colorModeColors[i % colorModeColors.length];
+        logo.appendChild(span);
+    });
+}
+
+
+const LOADING_IMAGES = [
+    'loading/loading1.webp',
+    'loading/loading2.webp',
+    'loading/loading4.webp',
+    'loading/loading5.webp',
+];
+
+function getRandomLoadingImage() {
+    return LOADING_IMAGES[Math.floor(Math.random() * LOADING_IMAGES.length)];
+}
+
+
+function showLoading() {
+    loading.style.display = 'flex';
+    errorMessage.style.display = 'none';
+}
+
+function hideLoading() {
+    loading.style.display = 'none';
+}
+
+function showError(message) {
+    errorMessage.textContent = message;
+    errorMessage.style.display = 'block';
+}
+
+function toggleAdvancedOptions() {
+    const isHidden = advancedOptions.style.display === 'none' || advancedOptions.style.display === '';
+    advancedOptions.style.display = isHidden ? 'block' : 'none';
+    
+    if (isHidden) {
+        advancedOptions.style.opacity = '0';
+        setTimeout(() => advancedOptions.style.opacity = '1', 10);
     }
-    
-    if (debug) {
-      return new Response(JSON.stringify({
-        code: exactMatch.code,
-        text: exactMatch.text,
-        url: buildImageUrl(exactMatch.code, exactMatch.text)
-      }), {
-        headers: { 
-          "Content-Type": "application/json",
-          "X-Image-Code": exactMatch.code,
-          "X-Image-Text": encodeURIComponent(exactMatch.text)
+}
+
+
+function loadSavedSettings() {
+    try {
+        const savedSettings = JSON.parse(localStorage.getItem('spongebobSettings'));
+        if (savedSettings) {
+            if (savedSettings.fuzzyLevel) fuzzyLevel.value = savedSettings.fuzzyLevel;
+            if (savedSettings.limit) limitInput.value = savedSettings.limit;
+            if (savedSettings.directLink !== undefined) directLinkCheckbox.checked = savedSettings.directLink;
         }
-      });
+    } catch (e) {
+        console.error('Failed to load settings:', e);
+    }
+}
+
+function saveSettings() {
+    try {
+        const settings = {
+            fuzzyLevel: fuzzyLevel.value,
+            limit: limitInput.value,
+            directLink: directLinkCheckbox.checked
+        };
+        localStorage.setItem('spongebobSettings', JSON.stringify(settings));
+    } catch (e) {
+        console.error('Failed to save settings:', e);
+    }
+}
+
+
+function getUrlParams() {
+    const params = {};
+    const searchParams = new URLSearchParams(window.location.search);
+    for (const [key, value] of searchParams) {
+        params[key] = value;
+    }
+    return params;
+}
+
+function updateUrlWithSearch(query, options = {}) {
+    const url = new URL(window.location);
+    url.search = '';
+    
+    if (query) url.searchParams.set('q', query);
+    if (options.fuzzy) url.searchParams.set('f', options.fuzzy);
+    if (options.limit) url.searchParams.set('limit', options.limit);
+    if (options.direct) url.searchParams.set('dir', options.direct);
+    if (options.random) url.searchParams.set('random', '1');
+    
+    window.history.pushState({
+        query,
+        options
+    }, '', url);
+}
+
+function handleUrlParams() {
+    const params = getUrlParams();
+    
+    if (params.q) {
+        searchInput.value = params.q;
+        if (params.f) fuzzyLevel.value = params.f;
+        if (params.limit) limitInput.value = params.limit;
+        if (params.dir) directLinkCheckbox.checked = params.dir === '1';
+        performSearch();
+    } else if (params.random) {
+        if (params.limit) limitInput.value = params.limit;
+        if (params.dir) directLinkCheckbox.checked = params.dir === '1';
+        getRandomImage();
+    }
+}
+
+ 
+async function performSearch() {
+    const query = searchInput.value.trim();
+    currentQuery = query;
+    
+    if (!query) {
+        showError('Please enter a search keyword or image number');
+        return;
     }
     
-    const imageUrl = `${buildImageUrl(exactMatch.code, exactMatch.text)}?t=${Date.now()}`;
+    saveSettings();
+    updateUrlWithSearch(query, {
+        fuzzy: fuzzyLevel.value,
+        limit: limitInput.value,
+        direct: directLinkCheckbox.checked ? '1' : '0'
+    });
     
-    // 修正: 如果dir=true，創建自定義重定向響應
-    if (dir) {
-      // 不再使用 Response.redirect，而是創建自定義響應
-      return new Response(null, {
-        status: 302,
-        headers: {
-          "Location": imageUrl,
-          "X-Image-Code": exactMatch.code,
-          "X-Image-Text": encodeURIComponent(exactMatch.text)
+    errorMessage.style.display = 'none';
+    showLoading();
+    resultsContainer.innerHTML = '';
+    
+    const f = fuzzyLevel.value;
+    let limit = parseInt(limitInput.value, 10) || 50;
+    if (limit > 50) limit = 5000;
+    
+    const dir = directLinkCheckbox.checked;
+    const isCodeSearch = /^SS\d+/i.test(query);
+    
+    let url = isCodeSearch
+        ? `${API_BASE_URL}/image?code=${query}&limit=${limit}&dir=${dir}`
+        : `${API_BASE_URL}/image?search=${query}&f=${f}&limit=${limit}&dir=${dir}`;
+    
+    try {
+        if (dir && limit === 1) {
+            window.open(url, '_blank');
+            hideLoading();
+            return;
         }
-      });
-    }
-    
-    const imageRes = await fetch(imageUrl);
-    if (!imageRes.ok) {
-      return new Response("Image fetch failed", { status: 502 });
-    }
-    
-    return new Response(imageRes.body, {
-      headers: {
-        "Content-Type": imageRes.headers.get("Content-Type") || "image/jpeg",
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "X-Image-Code": exactMatch.code,
-        "X-Image-Text": encodeURIComponent(exactMatch.text)
-      }
-    });
-  }
-
-  // 正常搜尋流程
-  const matched = matchEntries(search, index, f);
-
-  if (matched.length === 0) {
-    return new Response(`真的找不到有 ${search} 的圖`, { status: 404 });
-  }
-
-  // 調試模式：返回所有匹配項的資訊
-  if (debug) {
-    // 獲取數字形式的模糊級別
-    let fuzzyLevel = "未知";
-    if (f === "loose") fuzzyLevel = "0";
-    else if (f === "medium") fuzzyLevel = "1";
-    else if (f === "strict") fuzzyLevel = "2";
-    
-    return new Response(JSON.stringify({
-      query: search,
-      f: `${f} (${fuzzyLevel})`,
-      totalMatches: matched.length,
-      limitRequested: limit,
-      maxAllowedLimit: MAX_ALLOWED_LIMIT,
-      displayingResults: Math.min(matched.length, DEBUG_RESULTS_LIMIT),
-      matches: matched.slice(0, DEBUG_RESULTS_LIMIT).map(m => ({ 
-        code: m.code, 
-        text: m.text,
-        url: `${buildImageUrl(m.code, m.text)}?t=${Date.now()}`,
-        analysis: {
-          originalText: m.text,
-          normalizedText: m.text.replace(/-/g, ''),
-          cleanedText: clean(m.text),
-          queryNormalized: search.replace(/-/g, ''),
-          queryClean: clean(search)
+        
+        searchWrapper.classList.add('pinned-top');
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                showError(`No images containing "${query}" found`);
+            } else {
+                showError('An error occurred during search, please try again later');
+            }
+            hideLoading();
+            return;
         }
-      }))
-    }), {
-      headers: { 
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache, no-store, must-revalidate"
-      }
-    });
-  }
-
-  // 返回多個結果或隨機選擇一個
-  const effectiveLimit = Math.min(limit, MAX_ALLOWED_LIMIT);
-  
-  const results = limit > 1 
-    ? matched.slice(0, effectiveLimit) 
-    : [matched[Math.floor(Math.random() * matched.length)]];
-  
-  if (limit > 1) {
-    // 返回多個圖片的描述
-    return new Response(JSON.stringify({
-      totalMatches: matched.length,
-      limitRequested: limit,
-      returning: results.length,
-      maxAllowedLimit: MAX_ALLOWED_LIMIT,
-      results: results.map(r => ({
-        code: r.code,
-        text: r.text,
-        url: `${buildImageUrl(r.code, r.text)}?t=${Date.now()}`
-      }))
-    }), {
-      headers: { 
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache, no-store, must-revalidate"
-      }
-    });
-  } else {
-    // 返回單個圖片
-    const chosen = results[0];
-    const imageUrl = `${buildImageUrl(chosen.code, chosen.text)}?t=${Date.now()}`;
-
-    // 修正: 如果dir=true，創建自定義重定向響應
-    if (dir) {
-      // 不再使用 Response.redirect，而是創建自定義響應
-      return new Response(null, {
-        status: 302,
-        headers: {
-          "Location": imageUrl,
-          "X-Image-Code": chosen.code,
-          "X-Image-Text": encodeURIComponent(chosen.text)
+        
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('image/')) {
+            
+            const blob = await response.blob();
+            const imageUrl = URL.createObjectURL(blob);
+            
+            let imageCode = query;
+            let imageText = "Search result";
+            
+            const codeHeader = response.headers.get('x-image-code');
+            if (codeHeader) imageCode = codeHeader;
+            
+            const titleHeader = response.headers.get('x-image-text');
+            if (titleHeader) imageText = decodeURIComponent(decodeURIComponent(titleHeader));
+            
+            resultsContainer.innerHTML = `
+                <div class="results-summary">找到 1 張圖片</div>
+                <div class="single-image-container">
+                    <div class="grid-item single-item" data-code="${imageCode}" data-text="${imageText}" style="max-width: 90%; margin: 0 auto;">
+                        <img src="${imageUrl}" alt="${imageText}" loading="eager" style="max-width: 100%; height: auto; object-fit: contain;">
+                        <div class="grid-info">
+                            <div class="grid-code">${imageCode}</div>
+                            <div class="grid-text">${imageText}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            
+            const data = await response.json();
+    
+            if (data.results && data.results.length > 0) {
+                currentResults = data.results;
+                totalResults = currentResults.length;
+                displayResults(false);
+            } else {
+                showError('No matching results found');
+            }
         }
-      });
+    } catch (error) {
+        showError('An error occurred during search, please try again later');
+        console.error('Search error:', error);
+    } finally {
+        hideLoading();
     }
-
-    const imageRes = await fetch(imageUrl);
-    if (!imageRes.ok) {
-      return new Response("Image fetch failed", { status: 502 });
-    }
-
-    return new Response(imageRes.body, {
-      headers: {
-        "Content-Type": imageRes.headers.get("Content-Type") || "image/jpeg",
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "X-Image-Code": chosen.code,
-        "X-Image-Text": encodeURIComponent(chosen.text)
-      }
-    });
-  }
 }
 
-// 處理隨機圖片請求
-async function handleRandomImage(request) {
-  if (!index) {
-    const res = await fetch(INDEX_URL);
-    if (!res.ok) return new Response("Failed to load index", { status: 500 });
-    index = await res.json();
-  }
-
-  const url = new URL(request.url);
-  const debug = url.searchParams.get("debug") === "true";
-  const dir = url.searchParams.get("dir") === "true";
-  
-  // 檢查是否有明確設定 limit 參數
-  const hasExplicitLimit = url.searchParams.has("limit");
-  const limit = Math.min(parseInt(url.searchParams.get("limit") || "1", 10), MAX_ALLOWED_LIMIT);
-
-  // 隨機抽取不重複的 N 張圖
-  const shuffled = index.sort(() => 0.5 - Math.random());
-  const selected = shuffled.slice(0, limit).map((entry, i) => {
-    return {
-      code: entry.code,
-      text: entry.text,
-      url: `${buildImageUrl(entry.code, entry.text)}?t=${Date.now() + i}`
-    };
-  });
-
-  if (debug) {
-    return new Response(JSON.stringify({
-      type: "random",
-      totalImages: index.length,
-      requested: limit,
-      selected,
-    }), {
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache, no-store, must-revalidate"
-      }
-    });
-  }
-
-  // 修正: 如果dir=true
-  if (dir) {
+// Display results and pagination
+function displayResults(append = false) {
+    if (!append) {
+        loadedCount = 0;
+        resultsContainer.innerHTML = '';
+        hasMoreResults = true;
+    }
     
-    return new Response(null, {
-      status: 302,
-      headers: {
-        "Location": selected[0].url,
-        "X-Image-Code": selected[0].code,
-        "X-Image-Text": encodeURIComponent(selected[0].text)
-      }
-    });
-  }
-
-  // 如果沒有明確設定 limit 參數，則直接返回圖片內容
-  if (!hasExplicitLimit || limit === 1) {
-    const imageUrl = selected[0].url;
-    const imageRes = await fetch(imageUrl);
-    if (!imageRes.ok) {
-      return new Response("Image fetch failed", { status: 502 });
-    }
-  
-    return new Response(imageRes.body, {
-      headers: {
-        "Content-Type": imageRes.headers.get("Content-Type") || "image/jpeg",
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "X-Image-Code": selected[0].code,
-        "X-Image-Text": encodeURIComponent(selected[0].text)
-      }
-    });
-  }
-
-  // 有明確設定 limit 參數，則返回 JSON
-  return new Response(JSON.stringify({
-    type: "random",
-    returning: selected.length,
-    results: selected
-  }), {
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-cache, no-store, must-revalidate"
-    }
-  });
-}
-
-// 清理文本函數 - 用於所有清理文本的場景
-function clean(str) {
-  return str.toLowerCase().replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '');
-}
-
-// 模糊程度處理
-function matchEntries(query, list, f) {
-  const q = query.toLowerCase();
-
-  if (f === "strict") {
-    // 嚴格匹配：必須完全精準匹配
-    return list.filter(entry => {
-      return entry.text.toLowerCase() === q;
-    });
-  }
-
-  if (f === "medium") {
-    // 中等模糊度：查詢字串必須作為連續子字串出現
-    return list.filter(entry => {
-      const normalizedText = entry.text.toLowerCase();
-      return normalizedText.includes(q);
-    });
-  }
-
-  // loose 模式：不考慮順序，只要包含所有字元即可
-  return list.filter(entry => {
-    const entryText = clean(entry.text);
-    const queryChars = Array.from(clean(q));
+    if (!hasMoreResults) return;
     
-    // 檢查是否所有查詢字元都出現在條目中
-    return queryChars.every(char => entryText.includes(char));
-  });
+    const userLimit = parseInt(limitInput.value, 10) || 50;
+    const actualTotalResults = Math.min(totalResults, userLimit);
+    
+    const startIndex = loadedCount;
+    const endIndex = Math.min(startIndex + itemsPerLoad, actualTotalResults);
+    const pageResults = currentResults.slice(startIndex, endIndex);
+    
+    loadedCount = endIndex;
+    hasMoreResults = loadedCount < actualTotalResults;
+    
+    if (!append) {
+        const summaryHTML = `
+            <div class="results-summary">
+                找到 ${totalResults}張圖片|顯示 ${actualTotalResults} 張圖片|關鍵字"${currentQuery}"
+            </div>
+        `;
+        resultsContainer.innerHTML = summaryHTML;
+    }
+    
+    let gridContainer = document.querySelector('.results-grid');
+    if (!gridContainer) {
+        gridContainer = document.createElement('div');
+        gridContainer.className = 'results-grid';
+        resultsContainer.appendChild(gridContainer);
+    }
+    
+    pageResults.forEach(item => {
+        const gridItem = document.createElement('div');
+        gridItem.className = 'grid-item';
+        gridItem.dataset.code = item.code;
+        gridItem.dataset.text = item.text;
+        
+        gridItem.innerHTML = `
+            <img src="${item.url}" alt="${item.text}" loading="eager">
+            <div class="grid-info">
+                <div class="grid-code">${item.code}</div>
+                <div class="grid-text">${item.text}</div>
+            </div>
+        `;
+        
+        gridContainer.appendChild(gridItem);
+    });
+    
+    if (!append) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    
+    const loadingIndicator = document.getElementById('scrollLoadingIndicator');
+    if (hasMoreResults) {
+        if (!loadingIndicator) {
+            const indicator = document.createElement('div');
+            indicator.id = 'scrollLoadingIndicator';
+            indicator.className = 'loading';
+            indicator.innerHTML = `
+                <div class="loading-spinner"></div>
+                <div>Loading more...</div>
+            `;
+            resultsContainer.appendChild(indicator);
+        }
+        if (loadingIndicator) loadingIndicator.style.display = 'none';
+    } else if (loadingIndicator) {
+        loadingIndicator.remove();
+    }
 }
 
-// 根據 code 和 text 產生 GitHub 圖片 URL
-function buildImageUrl(code, text) {
-  const match = code.match(/SS(\d+)/);
-  if (!match) return null;
 
-  const num = parseInt(match[1], 10);
-  const folderStart = Math.floor((num - 1) / 100) * 100 + 1;
-  const folderEnd = folderStart + 99;
-
-  const folder = `SS${String(folderStart).padStart(4, "0")}-SS${String(folderEnd).padStart(4, "0")}`;
-  const filename = `【${code}】${text}.jpg`;
-
-  return `${BASE_URL}${folder}/${encodeURIComponent(filename)}`;
+async function getRandomImage() {
+    updateUrlWithSearch('', {
+        random: true,
+        limit: limitInput.value,
+        direct: directLinkCheckbox.checked ? '1' : '0'
+    });
+    
+    showLoading();
+    resultsContainer.innerHTML = '';
+    saveSettings();
+    
+    const limit = parseInt(limitInput.value, 10) || 50;
+    const dir = directLinkCheckbox.checked;
+    const url = `${API_BASE_URL}/image?random&limit=${limit}&dir=${dir}`;
+    
+    currentQuery = '隨機圖片';
+    
+    try {
+        if (dir && limit === 1) {
+            window.open(url, '_blank');
+            hideLoading();
+            return;
+        }
+        
+        searchWrapper.classList.add('pinned-top');
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            showError('Error getting random image, please try again later');
+            hideLoading();
+            return;
+        }
+        
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('image/')) {
+            const blob = await response.blob();
+            const imageUrl = URL.createObjectURL(blob);
+            
+            let imageCode = "Random image";
+            let imageText = "Random SpongeBob image";
+            
+            const codeHeader = response.headers.get('x-image-code');
+            if (codeHeader) imageCode = codeHeader;
+            
+            const titleHeader = response.headers.get('x-image-text');
+            if (titleHeader) imageText = decodeURIComponent(decodeURIComponent(titleHeader));
+            
+            resultsContainer.innerHTML = `
+                <div class="results-summary">隨機圖片</div>
+                <div class="single-image-container">
+                    <div class="grid-item single-item" data-code="${imageCode}" data-text="${imageText}" style="max-width: 90%; margin: 0 auto;">
+                        <img src="${imageUrl}" alt="${imageText}" loading="eager" style="max-width: 100%; height: auto; object-fit: contain;">
+                        <div class="grid-info">
+                            <div class="grid-code">${imageCode}</div>
+                            <div class="grid-text">${imageText}</div>
+                        </div> 
+                    </div>
+                </div>
+            `;
+        } else {
+            const data = await response.json();
+        
+            if (data.results && data.results.length > 0) {
+                currentResults = data.results;
+                totalResults = currentResults.length;
+                displayResults(false);
+            } else {
+                showError('Unable to get random images');
+            }
+        }
+    } catch (error) {
+        showError('Error getting random image');
+        console.error('Random image error:', error);
+    } finally {
+        hideLoading();
+    }
 }
+
+// Scroll handling
+function handleScroll() {
+    if (isLoading || !hasMoreResults) return;
+    
+    const scrollHeight = document.documentElement.scrollHeight;
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    const clientHeight = window.innerHeight || document.documentElement.clientHeight;
+    
+    if (scrollHeight - scrollTop - clientHeight < 300) {
+        loadMoreResults();
+    }
+}
+
+function loadMoreResults() {
+    if (isLoading || !hasMoreResults) return;
+    
+    isLoading = true;
+    
+    const loadingIndicator = document.getElementById('scrollLoadingIndicator');
+    if (loadingIndicator) loadingIndicator.style.display = 'flex';
+
+    setTimeout(() => {
+        displayResults(true);
+        isLoading = false;
+        if (loadingIndicator) loadingIndicator.style.display = 'none';
+    }, 400);
+}
+
+function updateScrollTopButtonVisibility() {
+    scrollTopButton.style.display = window.scrollY > 500 ? 'flex' : 'none';
+}
+
+function scrollToTop() {
+    window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+    });
+}
+
+// Modal handling
+function handleImageClick(e) {
+    const img = e.target.closest('.grid-item img');
+    if (!img) return;
+    
+    const gridItem = img.closest('.grid-item');
+    const imgSrc = img.src;
+    const imgCode = gridItem.dataset.code || 'Unknown';
+    const imgText = gridItem.dataset.text || 'SpongeBob image';
+    
+    createImageModal(imgSrc, imgCode, imgText);
+}
+
+function createImageModal(imgSrc, imgCode, imgText) {
+    const modal = document.createElement('div');
+    modal.className = 'image-modal';
+    
+    modal.innerHTML = `
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <img src="${imgSrc}" alt="${imgText}" class="modal-image">
+            <div class="modal-info">
+                <strong>${imgCode}</strong>
+                <p>${imgText}</p>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+    
+    setTimeout(() => modal.style.opacity = 1, 10);
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target.className === 'image-modal' || e.target.className === 'modal-close') {
+            closeModal(modal);
+        }
+    });
+    
+    document.addEventListener('keydown', function escHandler(e) {
+        if (e.key === 'Escape') {
+            closeModal(modal);
+            document.removeEventListener('keydown', escHandler);
+        }
+    });
+}
+
+function closeModal(modal) {
+    modal.style.opacity = 0;
+    setTimeout(() => {
+        document.body.removeChild(modal);
+        document.body.style.overflow = '';
+    }, 300);
+}
+
+// Theme toggle
+function setupThemeToggle() {
+    themeSwitch.addEventListener('click', () => {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        
+        if (currentTheme === 'dark') {
+            document.documentElement.removeAttribute('data-theme');
+            localStorage.setItem('theme', 'light');
+            moonPath.style.display = 'block';
+            sunPath.style.display = 'none';
+            updateLogoColors(false);
+        } else {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            localStorage.setItem('theme', 'dark');
+            moonPath.style.display = 'none';
+            sunPath.style.display = 'block';
+            updateLogoColors(true);
+        }
+    });
+}
+
+// System theme preference
+function setupSystemThemeWatcher() {
+    if (!localStorage.getItem('theme')) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+            if (e.matches) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                moonPath.style.display = 'none';
+                sunPath.style.display = 'block';
+                updateLogoColors(true);
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+                moonPath.style.display = 'block';
+                sunPath.style.display = 'none';
+                updateLogoColors(false);
+            }
+        });
+    }
+}
+
+// Initialization
+function init() {
+    setupLogo();
+    applyStoredTheme();
+    setupThemeToggle();
+    setupSystemThemeWatcher();
+    
+    // Event listeners
+    searchButton.addEventListener('click', performSearch);
+    randomButton.addEventListener('click', getRandomImage);
+    toggleAdvancedButton.addEventListener('click', toggleAdvancedOptions);
+    scrollTopButton.addEventListener('click', scrollToTop);
+    
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performSearch();
+    });
+    
+    window.addEventListener('scroll', () => {
+        handleScroll();
+        updateScrollTopButtonVisibility();
+    });
+    
+    document.addEventListener('click', handleImageClick);
+    
+    // History state handling
+    window.addEventListener('popstate', (event) => {
+        if (event.state) {
+            const { query, options } = event.state;
+            
+            searchInput.value = query || '';
+            
+            if (options) {
+                if (options.fuzzy) fuzzyLevel.value = options.fuzzy;
+                if (options.limit) limitInput.value = options.limit;
+                if (options.direct) directLinkCheckbox.checked = options.direct === '1';
+            }
+            
+            if (query) {
+                performSearch();
+            } else if (options && options.random) {
+                getRandomImage();
+            }
+        } else {
+            resultsContainer.innerHTML = '';
+            searchWrapper.classList.remove('pinned-top');
+        }
+    });
+    
+    loadSavedSettings();
+    handleUrlParams();
+}
+
+document.addEventListener('DOMContentLoaded', init);
