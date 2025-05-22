@@ -1,6 +1,6 @@
 const API_BASE_URL = 'https://spongebob.potatomatoyota.workers.dev';
 
-// DOM elements
+// 所有需要使用的 DOM 元素
 const searchInput = document.getElementById('searchInput');
 const searchButton = document.getElementById('searchButton');
 const randomButton = document.getElementById('randomButton');
@@ -18,7 +18,7 @@ const themeSwitch = document.getElementById('themeSwitch');
 const moonPath = document.getElementById('moonPath');
 const sunPath = document.getElementById('sunPath');
 
-// Pagination variables
+// 相關變數
 let isLoading = false;
 let hasMoreResults = true;
 let itemsPerLoad = 30;
@@ -27,7 +27,7 @@ let currentResults = [];
 let totalResults = 0;
 let currentQuery = '';
 
-
+//顏色設定
 const colorModeColors = [
     '#f44336', '#e91e63', '#9c27b0', '#3f51b5', '#2196f3',
     '#009688', '#4caf50', '#ffc107', '#ff5722', '#795548',
@@ -50,7 +50,7 @@ function applyStoredTheme() {
         updateLogoColors(false);
     }
 }
-
+// 更新 logo 顏色
 function updateLogoColors(isDarkMode) {
     const logoChars = document.querySelectorAll('.logo-char');
     const colors = isDarkMode ? darkModeColors : colorModeColors;
@@ -59,7 +59,7 @@ function updateLogoColors(isDarkMode) {
         span.style.color = colors[i % colors.length];
     });
 }
-
+// 設置 logo
 function setupLogo() {
     const logo = document.getElementById('logo');
     const text = logo.textContent;
@@ -75,16 +75,8 @@ function setupLogo() {
 }
 
 
-const LOADING_IMAGES = [
-    'loading/loading1.webp',
-    'loading/loading2.webp',
-    'loading/loading4.webp',
-    'loading/loading5.webp',
-];
 
-function getRandomLoadingImage() {
-    return LOADING_IMAGES[Math.floor(Math.random() * LOADING_IMAGES.length)];
-}
+
 
 
 function showLoading() {
@@ -280,7 +272,7 @@ async function performSearch() {
     }
 }
 
-// Display results and pagination
+// 創建圖片模態框
 function displayResults(append = false) {
     if (!append) {
         loadedCount = 0;
@@ -337,7 +329,7 @@ function displayResults(append = false) {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
     
-    const loadingIndicator = document.getElementById('scrollLoadingIndicator');
+     const loadingIndicator = document.getElementById('scrollLoadingIndicator');
     if (hasMoreResults) {
         if (!loadingIndicator) {
             const indicator = document.createElement('div');
@@ -345,7 +337,7 @@ function displayResults(append = false) {
             indicator.className = 'loading';
             indicator.innerHTML = `
                 <div class="loading-spinner"></div>
-                <div>Loading more...</div>
+                <div>載入更多...</div>
             `;
             resultsContainer.appendChild(indicator);
         }
@@ -435,7 +427,182 @@ async function getRandomImage() {
     }
 }
 
-// Scroll handling
+// 複製圖片到剪貼簿
+async function copyImageToClipboard(imgElement, imgCode) {
+    try {
+        // 方法1: 如果圖片已經加載到頁面中，使用 canvas 轉換
+        if (imgElement && imgElement.complete && imgElement.naturalWidth > 0) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = imgElement.naturalWidth;
+            canvas.height = imgElement.naturalHeight;
+            
+            // 設置白色背景（以防透明圖片）
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 繪製圖片到 canvas
+            ctx.drawImage(imgElement, 0, 0);
+            
+            // 嘗試不同的圖片格式
+            const formats = ['image/png', 'image/jpeg', 'image/webp'];
+            
+            for (const format of formats) {
+                try {
+                    const blob = await new Promise((resolve) => {
+                        canvas.toBlob(resolve, format, 0.9);
+                    });
+                    
+                    if (blob && navigator.clipboard && navigator.clipboard.write) {
+                        // 檢查瀏覽器是否支援此格式
+                        const clipboardItem = new ClipboardItem({
+                            [format]: blob
+                        });
+                        
+                        await navigator.clipboard.write([clipboardItem]);
+                        return true;
+                    }
+                } catch (formatError) {
+                    console.warn(`格式 ${format} 不支援:`, formatError);
+                    continue; // 嘗試下一個格式
+                }
+            }
+        }
+        
+        // 方法2: 嘗試通過 API 獲取（如果有 SS 代碼）
+        if (imgCode && /^SS\d+/i.test(imgCode)) {
+            try {
+                const apiUrl = `${API_BASE_URL}/image?code=${imgCode}&dir=1`;
+                const response = await fetch(apiUrl);
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    
+                    // 如果是 JPEG，轉換為 PNG
+                    if (blob.type === 'image/jpeg') {
+                        const convertedBlob = await convertBlobToPng(blob);
+                        if (convertedBlob && navigator.clipboard && navigator.clipboard.write) {
+                            await navigator.clipboard.write([
+                                new ClipboardItem({
+                                    'image/png': convertedBlob
+                                })
+                            ]);
+                            return true;
+                        }
+                    } else if (navigator.clipboard && navigator.clipboard.write) {
+                        await navigator.clipboard.write([
+                            new ClipboardItem({
+                                [blob.type]: blob
+                            })
+                        ]);
+                        return true;
+                    }
+                }
+            } catch (error) {
+                console.error('API 獲取失敗:', error);
+            }
+        }
+        
+        return false;
+    } catch (error) {
+        console.error('複製圖片失敗:', error);
+        return false;
+    }
+}
+// 將 blob 轉換為 PNG 格式
+async function convertBlobToPng(blob) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            
+            // 設置白色背景
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 繪製圖片
+            ctx.drawImage(img, 0, 0);
+            
+            // 轉換為 PNG blob
+            canvas.toBlob(resolve, 'image/png');
+        };
+        img.onerror = () => resolve(null);
+        img.src = URL.createObjectURL(blob);
+    });
+}
+// 複製圖片連結到剪貼簿（備用方案）
+async function copyImageLinkToClipboard(imgSrc, imgCode, imgText) {
+    try {
+        const textToCopy = `${imgCode}: ${imgText}\n圖片連結: ${imgSrc}`;
+        
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(textToCopy);
+            return true;
+        }
+        
+        // 備用方案：使用舊的方法
+        const textArea = document.createElement('textarea');
+        textArea.value = textToCopy;
+        textArea.style.position = 'fixed';
+        textArea.style.top = '-1000px';
+        document.body.appendChild(textArea);
+        textArea.select();
+        const success = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        return success;
+    } catch (error) {
+        console.error('複製連結失敗:', error);
+        return false;
+    }
+}
+
+function showCopyStatus(success, message, element) {
+    const toast = document.createElement('div');
+    toast.className = 'copy-toast';
+    toast.textContent = message || (success ? '圖片已複製到剪貼簿!' : '複製失敗，請稍後再試');
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${success ? '#4caf50' : '#f44336'};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        z-index: 10000;
+        font-size: 14px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        opacity: 0;
+        transform: translateY(-20px);
+        transition: all 0.3s ease;
+        max-width: 300px;
+        word-wrap: break-word;
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // 顯示動畫
+    setTimeout(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateY(0)';
+    }, 10);
+    
+    // 3秒後移除
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-20px)';
+        setTimeout(() => {
+            if (document.body.contains(toast)) {
+                document.body.removeChild(toast);
+            }
+        }, 300);
+    }, 3000);
+}
+
 function handleScroll() {
     if (isLoading || !hasMoreResults) return;
     
@@ -474,7 +641,9 @@ function scrollToTop() {
     });
 }
 
-// Modal handling
+
+
+
 function handleImageClick(e) {
     const img = e.target.closest('.grid-item img');
     if (!img) return;
@@ -484,41 +653,62 @@ function handleImageClick(e) {
     const imgCode = gridItem.dataset.code || 'Unknown';
     const imgText = gridItem.dataset.text || 'SpongeBob image';
     
-    createImageModal(imgSrc, imgCode, imgText);
+    // 檢查是否按住 Ctrl/Cmd 鍵，如果是則複製圖片
+    if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        copyImageToClipboard(imgSrc).then(success => {
+            showCopyStatus(success);
+        });
+        return;
+    }
+    
+    // 添加視覺反饋，表示可以複製
+    gridItem.style.transform = 'scale(0.98)';
+    setTimeout(() => {
+        gridItem.style.transform = '';
+    }, 150);
+    
+    // 嘗試複製圖片
+    copyImageToClipboard(imgSrc).then(success => {
+        showCopyStatus(success, gridItem);
+        
+        // 如果複製成功，不打開模態框
+        if (!success) {
+            // 複製失敗時才打開模態框
+            createImageModal(imgSrc, imgCode, imgText);
+        }
+    });
 }
 
-function createImageModal(imgSrc, imgCode, imgText) {
-    const modal = document.createElement('div');
-    modal.className = 'image-modal';
-    
-    modal.innerHTML = `
-        <div class="modal-content">
-            <span class="modal-close">&times;</span>
-            <img src="${imgSrc}" alt="${imgText}" class="modal-image">
-            <div class="modal-info">
-                <strong>${imgCode}</strong>
-                <p>${imgText}</p>
-            </div>
-        </div>
+
+function addCopyStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+        .grid-item {
+            cursor: pointer;
+            transition: transform 0.15s ease;
+        }
+        
+        .grid-item:hover {
+            transform: translateY(-2px);
+        }
+        
+        .grid-item:active {
+            transform: scale(0.98);
+        }
+        
+        .copy-toast {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        /* 添加提示文字 */
+        .results-summary::after {
+            content: " | 點擊圖片複製到剪貼簿";
+            font-size: 0.9em;
+            opacity: 0.7;
+        }
     `;
-    
-    document.body.appendChild(modal);
-    document.body.style.overflow = 'hidden';
-    
-    setTimeout(() => modal.style.opacity = 1, 10);
-    
-    modal.addEventListener('click', (e) => {
-        if (e.target.className === 'image-modal' || e.target.className === 'modal-close') {
-            closeModal(modal);
-        }
-    });
-    
-    document.addEventListener('keydown', function escHandler(e) {
-        if (e.key === 'Escape') {
-            closeModal(modal);
-            document.removeEventListener('keydown', escHandler);
-        }
-    });
+    document.head.appendChild(style);
 }
 
 function closeModal(modal) {
@@ -569,14 +759,15 @@ function setupSystemThemeWatcher() {
     }
 }
 
-// Initialization
+
 function init() {
     setupLogo();
     applyStoredTheme();
     setupThemeToggle();
     setupSystemThemeWatcher();
+    addCopyStyles();
     
-    // Event listeners
+    
     searchButton.addEventListener('click', performSearch);
     randomButton.addEventListener('click', getRandomImage);
     toggleAdvancedButton.addEventListener('click', toggleAdvancedOptions);
@@ -593,7 +784,7 @@ function init() {
     
     document.addEventListener('click', handleImageClick);
     
-    // History state handling
+    
     window.addEventListener('popstate', (event) => {
         if (event.state) {
             const { query, options } = event.state;
