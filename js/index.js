@@ -1,6 +1,6 @@
 const API_BASE_URL = 'https://spongebob.potatomatoyota.workers.dev';
 
-// 所有需要使用的 DOM 元素
+// DOM elements
 const searchInput = document.getElementById('searchInput');
 const searchButton = document.getElementById('searchButton');
 const randomButton = document.getElementById('randomButton');
@@ -18,7 +18,7 @@ const themeSwitch = document.getElementById('themeSwitch');
 const moonPath = document.getElementById('moonPath');
 const sunPath = document.getElementById('sunPath');
 
-// 相關變數
+// Pagination variables
 let isLoading = false;
 let hasMoreResults = true;
 let itemsPerLoad = 30;
@@ -27,7 +27,6 @@ let currentResults = [];
 let totalResults = 0;
 let currentQuery = '';
 
-//顏色設定
 const colorModeColors = [
     '#f44336', '#e91e63', '#9c27b0', '#3f51b5', '#2196f3',
     '#009688', '#4caf50', '#ffc107', '#ff5722', '#795548',
@@ -50,7 +49,7 @@ function applyStoredTheme() {
         updateLogoColors(false);
     }
 }
-// 更新 logo 顏色
+
 function updateLogoColors(isDarkMode) {
     const logoChars = document.querySelectorAll('.logo-char');
     const colors = isDarkMode ? darkModeColors : colorModeColors;
@@ -59,7 +58,7 @@ function updateLogoColors(isDarkMode) {
         span.style.color = colors[i % colors.length];
     });
 }
-// 設置 logo
+
 function setupLogo() {
     const logo = document.getElementById('logo');
     const text = logo.textContent;
@@ -73,11 +72,6 @@ function setupLogo() {
         logo.appendChild(span);
     });
 }
-
-
-
-
-
 
 function showLoading() {
     loading.style.display = 'flex';
@@ -102,7 +96,6 @@ function toggleAdvancedOptions() {
         setTimeout(() => advancedOptions.style.opacity = '1', 10);
     }
 }
-
 
 function loadSavedSettings() {
     try {
@@ -129,7 +122,6 @@ function saveSettings() {
         console.error('Failed to save settings:', e);
     }
 }
-
 
 function getUrlParams() {
     const params = {};
@@ -172,7 +164,26 @@ function handleUrlParams() {
     }
 }
 
- 
+// 修正URL解碼函數，避免中文文字被過度編碼
+function safeDecodeURIComponent(text) {
+    try {
+        // 先嘗試一次解碼
+        let decoded = decodeURIComponent(text);
+        // 如果解碼後還包含 %，再試一次解碼
+        if (decoded.includes('%')) {
+            try {
+                decoded = decodeURIComponent(decoded);
+            } catch (e) {
+                // 如果第二次解碼失敗，使用第一次的結果
+            }
+        }
+        return decoded;
+    } catch (e) {
+        // 如果解碼失敗，返回原始文字
+        return text;
+    }
+}
+
 async function performSearch() {
     const query = searchInput.value.trim();
     currentQuery = query;
@@ -227,7 +238,6 @@ async function performSearch() {
         const contentType = response.headers.get('content-type');
         
         if (contentType && contentType.includes('image/')) {
-            
             const blob = await response.blob();
             const imageUrl = URL.createObjectURL(blob);
             
@@ -238,13 +248,13 @@ async function performSearch() {
             if (codeHeader) imageCode = codeHeader;
             
             const titleHeader = response.headers.get('x-image-text');
-            if (titleHeader) imageText = decodeURIComponent(decodeURIComponent(titleHeader));
+            if (titleHeader) imageText = safeDecodeURIComponent(titleHeader);
             
             resultsContainer.innerHTML = `
                 <div class="results-summary">找到 1 張圖片</div>
                 <div class="single-image-container">
                     <div class="grid-item single-item" data-code="${imageCode}" data-text="${imageText}" style="max-width: 90%; margin: 0 auto;">
-                        <img src="${imageUrl}" alt="${imageText}" loading="eager" style="max-width: 100%; height: auto; object-fit: contain;">
+                        <img src="${imageUrl}" alt="${imageText}" loading="lazy" style="max-width: 100%; height: auto; object-fit: contain;">
                         <div class="grid-info">
                             <div class="grid-code">${imageCode}</div>
                             <div class="grid-text">${imageText}</div>
@@ -253,7 +263,6 @@ async function performSearch() {
                 </div>
             `;
         } else {
-            
             const data = await response.json();
     
             if (data.results && data.results.length > 0) {
@@ -272,7 +281,7 @@ async function performSearch() {
     }
 }
 
-// 創建圖片模態框
+// Display results and pagination
 function displayResults(append = false) {
     if (!append) {
         loadedCount = 0;
@@ -315,7 +324,7 @@ function displayResults(append = false) {
         gridItem.dataset.text = item.text;
         
         gridItem.innerHTML = `
-            <img src="${item.url}" alt="${item.text}" loading="eager">
+            <img src="${item.url}" alt="${item.text}" loading="lazy">
             <div class="grid-info">
                 <div class="grid-code">${item.code}</div>
                 <div class="grid-text">${item.text}</div>
@@ -329,7 +338,7 @@ function displayResults(append = false) {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
     
-     const loadingIndicator = document.getElementById('scrollLoadingIndicator');
+    const loadingIndicator = document.getElementById('scrollLoadingIndicator');
     if (hasMoreResults) {
         if (!loadingIndicator) {
             const indicator = document.createElement('div');
@@ -337,7 +346,7 @@ function displayResults(append = false) {
             indicator.className = 'loading';
             indicator.innerHTML = `
                 <div class="loading-spinner"></div>
-                <div>載入更多...</div>
+                <div>Loading more...</div>
             `;
             resultsContainer.appendChild(indicator);
         }
@@ -346,7 +355,6 @@ function displayResults(append = false) {
         loadingIndicator.remove();
     }
 }
-
 
 async function getRandomImage() {
     updateUrlWithSearch('', {
@@ -394,13 +402,13 @@ async function getRandomImage() {
             if (codeHeader) imageCode = codeHeader;
             
             const titleHeader = response.headers.get('x-image-text');
-            if (titleHeader) imageText = decodeURIComponent(decodeURIComponent(titleHeader));
+            if (titleHeader) imageText = safeDecodeURIComponent(titleHeader);
             
             resultsContainer.innerHTML = `
                 <div class="results-summary">隨機圖片</div>
                 <div class="single-image-container">
                     <div class="grid-item single-item" data-code="${imageCode}" data-text="${imageText}" style="max-width: 90%; margin: 0 auto;">
-                        <img src="${imageUrl}" alt="${imageText}" loading="eager" style="max-width: 100%; height: auto; object-fit: contain;">
+                        <img src="${imageUrl}" alt="${imageText}" loading="lazy" style="max-width: 100%; height: auto; object-fit: contain;">
                         <div class="grid-info">
                             <div class="grid-code">${imageCode}</div>
                             <div class="grid-text">${imageText}</div>
@@ -510,6 +518,7 @@ async function copyImageToClipboard(imgElement, imgCode) {
         return false;
     }
 }
+
 // 將 blob 轉換為 PNG 格式
 async function convertBlobToPng(blob) {
     return new Promise((resolve) => {
@@ -535,6 +544,7 @@ async function convertBlobToPng(blob) {
         img.src = URL.createObjectURL(blob);
     });
 }
+
 // 複製圖片連結到剪貼簿（備用方案）
 async function copyImageLinkToClipboard(imgSrc, imgCode, imgText) {
     try {
@@ -603,6 +613,112 @@ function showCopyStatus(success, message, element) {
     }, 3000);
 }
 
+// 創建圖片模態框
+function createImageModal(imgSrc, imgCode, imgText) {
+    const modal = document.createElement('div');
+    modal.className = 'image-modal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.95);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+        opacity: 0;
+        transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    `;
+    
+    const img = document.createElement('img');
+    img.src = imgSrc;
+    img.style.cssText = `
+        max-width: 95vw;
+        max-height: 95vh;
+        object-fit: contain;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+        transform: scale(0.8);
+        transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        cursor: zoom-out;
+    `;
+    
+    
+   
+    
+    // 關閉按鈕
+    const closeBtn = document.createElement('div');
+    closeBtn.innerHTML = '✕';
+    closeBtn.style.cssText = `
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 40px;
+        height: 40px;
+        background: rgba(255, 255, 255, 0.15);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 18px;
+        font-weight: bold;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        transition: all 0.3s ease;
+        opacity: 0;
+        transform: scale(0.8);
+    `;
+    
+    closeBtn.addEventListener('mouseenter', () => {
+        closeBtn.style.background = 'rgba(255, 255, 255, 0.25)';
+        closeBtn.style.transform = 'scale(1.1)';
+    });
+    
+    closeBtn.addEventListener('mouseleave', () => {
+        closeBtn.style.background = 'rgba(255, 255, 255, 0.15)';
+        closeBtn.style.transform = 'scale(1)';
+    });
+    
+    closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeModal(modal);
+    });
+    
+    modal.appendChild(img);
+    modal.appendChild(closeBtn);
+    
+    // 點擊背景或圖片關閉
+    modal.addEventListener('click', () => closeModal(modal));
+    
+    // ESC鍵關閉
+    const handleEsc = (e) => {
+        if (e.key === 'Escape') {
+            closeModal(modal);
+            document.removeEventListener('keydown', handleEsc);
+        }
+    };
+    document.addEventListener('keydown', handleEsc);
+    
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+    
+    // 顯示動畫
+    setTimeout(() => {
+        modal.style.opacity = '1';
+        img.style.transform = 'scale(1)';
+        closeBtn.style.opacity = '1';
+        closeBtn.style.transform = 'scale(1)';
+        
+    }, 50);
+}
+
 function handleScroll() {
     if (isLoading || !hasMoreResults) return;
     
@@ -641,9 +757,7 @@ function scrollToTop() {
     });
 }
 
-
-
-
+// 修改圖片點擊處理函數
 function handleImageClick(e) {
     const img = e.target.closest('.grid-item img');
     if (!img) return;
@@ -653,12 +767,10 @@ function handleImageClick(e) {
     const imgCode = gridItem.dataset.code || 'Unknown';
     const imgText = gridItem.dataset.text || 'SpongeBob image';
     
-    // 檢查是否按住 Ctrl/Cmd 鍵，如果是則複製圖片
+    // 檢查是否按住 Ctrl/Cmd 鍵，如果是則顯示模態框
     if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
-        copyImageToClipboard(imgSrc).then(success => {
-            showCopyStatus(success);
-        });
+        createImageModal(imgSrc, imgCode, imgText);
         return;
     }
     
@@ -669,17 +781,10 @@ function handleImageClick(e) {
     }, 150);
     
     // 嘗試複製圖片
-    copyImageToClipboard(imgSrc).then(success => {
-        showCopyStatus(success, gridItem);
-        
-        // 如果複製成功，不打開模態框
-        if (!success) {
-            // 複製失敗時才打開模態框
-            createImageModal(imgSrc, imgCode, imgText);
-        }
+    copyImageToClipboard(img, imgCode).then(success => {
+        showCopyStatus(success);
     });
 }
-
 
 function addCopyStyles() {
     const style = document.createElement('style');
@@ -703,9 +808,23 @@ function addCopyStyles() {
         
         /* 添加提示文字 */
         .results-summary::after {
-            content: " | 點擊圖片複製到剪貼簿";
+            content: " | 點擊圖片複製到剪貼簿 | Ctrl+點擊查看大圖";
             font-size: 0.9em;
             opacity: 0.7;
+        }
+        
+        /* 添加深色主題下的模態框樣式 */
+        [data-theme="dark"] .image-modal .modal-content {
+            background: #2d2d2d !important;
+            color: #fff !important;
+        }
+        
+        [data-theme="dark"] .image-modal .modal-content .info {
+            color: #fff !important;
+        }
+        
+        [data-theme="dark"] .image-modal .modal-content .info div:last-child {
+            color: #ccc !important;
         }
     `;
     document.head.appendChild(style);
@@ -759,14 +878,12 @@ function setupSystemThemeWatcher() {
     }
 }
 
-
 function init() {
     setupLogo();
     applyStoredTheme();
     setupThemeToggle();
     setupSystemThemeWatcher();
     addCopyStyles();
-    
     
     searchButton.addEventListener('click', performSearch);
     randomButton.addEventListener('click', getRandomImage);
@@ -783,7 +900,6 @@ function init() {
     });
     
     document.addEventListener('click', handleImageClick);
-    
     
     window.addEventListener('popstate', (event) => {
         if (event.state) {
