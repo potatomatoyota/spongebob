@@ -434,11 +434,420 @@ async function getRandomImage() {
         hideLoading();
     }
 }
+// 檢測設備類型
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+           (navigator.maxTouchPoints && navigator.maxTouchPoints > 2 && /MacIntel/.test(navigator.platform));
+}
 
-// 複製圖片到剪貼簿
+// 檢測瀏覽器是否支援 Clipboard API
+function isClipboardAPISupported() {
+    return navigator.clipboard && 
+           typeof navigator.clipboard.write === 'function' && 
+           window.isSecureContext;
+}
+
+// 檢測是否為 iOS Safari
+function isIOSSafari() {
+    const ua = navigator.userAgent;
+    const iOS = /iPad|iPhone|iPod/.test(ua);
+    const webkit = /WebKit/.test(ua);
+    const safari = /Safari/.test(ua) && !/Chrome/.test(ua);
+    return iOS && webkit && safari;
+}
+
+// 手機端專用的複製圖片功能
+async function copyImageToClipboardMobile(imgElement, imgCode, imgSrc) {
+    try {
+        // 方法1: 嘗試使用 Clipboard API (適用於支援的瀏覽器)
+        if (isClipboardAPISupported()) {
+            try {
+                // 對於已載入的圖片，使用 canvas 轉換
+                if (imgElement && imgElement.complete && imgElement.naturalWidth > 0) {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    canvas.width = imgElement.naturalWidth;
+                    canvas.height = imgElement.naturalHeight;
+                    
+                    // 設置白色背景
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(imgElement, 0, 0);
+                    
+                    // 嘗試轉換為 blob
+                    const blob = await new Promise((resolve) => {
+                        canvas.toBlob(resolve, 'image/png', 0.9);
+                    });
+                    
+                    if (blob) {
+                        const clipboardItem = new ClipboardItem({
+                            'image/png': blob
+                        });
+                        await navigator.clipboard.write([clipboardItem]);
+                        return { success: true, method: 'clipboard-api' };
+                    }
+                }
+                
+                // 如果有 SS 代碼，嘗試通過 API 獲取
+                if (imgCode && /^SS\d+/i.test(imgCode)) {
+                    const response = await fetch(`${API_BASE_URL}/image?code=${imgCode}&dir=1`);
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const clipboardItem = new ClipboardItem({
+                            [blob.type]: blob
+                        });
+                        await navigator.clipboard.write([clipboardItem]);
+                        return { success: true, method: 'clipboard-api' };
+                    }
+                }
+            } catch (error) {
+                console.warn('Clipboard API 複製失敗:', error);
+            }
+        }
+        
+        // 方法2: iOS Safari 特殊處理 - 創建可選擇的圖片
+        if (isIOSSafari()) {
+            return await copyImageIOSSafari(imgSrc, imgCode);
+        }
+        
+        // 方法3: Android 和其他手機瀏覽器 - 顯示操作選單
+        return await showMobileCopyMenu(imgSrc, imgCode, imgElement);
+        
+    } catch (error) {
+        console.error('手機複製功能錯誤:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// iOS Safari 專用複製方法
+async function copyImageIOSSafari(imgSrc, imgCode) {
+    return new Promise((resolve) => {
+        // 創建一個可以長按複製的圖片模態框
+        const modal = document.createElement('div');
+        modal.className = 'ios-copy-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10001;
+            padding: 20px;
+            box-sizing: border-box;
+        `;
+        
+        const instruction = document.createElement('div');
+        instruction.textContent = '長按圖片選擇「複製圖片」來複製圖片';
+        instruction.style.cssText = `
+            color: white;
+            font-size: 16px;
+            margin-bottom: 20px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px 20px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+        `;
+        
+        const img = document.createElement('img');
+        img.src = imgSrc;
+        img.style.cssText = `
+            max-width: 90%;
+            max-height: 60%;
+            object-fit: contain;
+            border-radius: 8px;
+            -webkit-user-select: none;
+            user-select: none;
+            pointer-events: auto;
+        `;
+        
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = '關閉';
+        closeBtn.style.cssText = `
+            margin-top: 20px;
+            padding: 12px 24px;
+            background: #007AFF;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+        `;
+        
+        closeBtn.addEventListener('click', () => {
+            document.body.removeChild(modal);
+            document.body.style.overflow = '';
+            resolve({ success: true, method: 'ios-longpress' });
+        });
+        
+        modal.appendChild(instruction);
+        modal.appendChild(img);
+        modal.appendChild(closeBtn);
+        
+        document.body.appendChild(modal);
+        document.body.style.overflow = 'hidden';
+    });
+}
+
+// Android 和其他手機瀏覽器的操作選單
+async function showMobileCopyMenu(imgSrc, imgCode, imgElement) {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.className = 'mobile-copy-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10001;
+            padding: 20px;
+            box-sizing: border-box;
+        `;
+        
+        const menu = document.createElement('div');
+        menu.style.cssText = `
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 320px;
+            width: 100%;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        `;
+        
+        // 如果是深色主題，調整樣式
+        if (document.documentElement.getAttribute('data-theme') === 'dark') {
+            menu.style.background = '#2d2d2d';
+            menu.style.color = 'white';
+        }
+        
+        const title = document.createElement('h3');
+        title.textContent = '複製選項';
+        title.style.cssText = `
+            margin: 0 0 20px 0;
+            text-align: center;
+            font-size: 18px;
+        `;
+        
+        const imgPreview = document.createElement('img');
+        imgPreview.src = imgSrc;
+        imgPreview.style.cssText = `
+            width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        `;
+        
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        `;
+        
+        // 複製圖片按鈕 (如果支援)
+        if (isClipboardAPISupported()) {
+            const copyImageBtn = document.createElement('button');
+            copyImageBtn.textContent = '📷 複製圖片';
+            copyImageBtn.style.cssText = `
+                padding: 14px;
+                background: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 16px;
+                cursor: pointer;
+            `;
+            
+            copyImageBtn.addEventListener('click', async () => {
+                try {
+                    // 嘗試複製圖片
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    canvas.width = imgElement.naturalWidth || 300;
+                    canvas.height = imgElement.naturalHeight || 200;
+                    
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    if (imgElement && imgElement.complete) {
+                        ctx.drawImage(imgElement, 0, 0);
+                    }
+                    
+                    const blob = await new Promise(resolve => {
+                        canvas.toBlob(resolve, 'image/png');
+                    });
+                    
+                    if (blob) {
+                        await navigator.clipboard.write([
+                            new ClipboardItem({ 'image/png': blob })
+                        ]);
+                        
+                        document.body.removeChild(modal);
+                        document.body.style.overflow = '';
+                        resolve({ success: true, method: 'mobile-clipboard' });
+                        return;
+                    }
+                } catch (error) {
+                    console.error('複製圖片失敗:', error);
+                }
+                
+                // 如果失敗，顯示錯誤訊息
+                copyImageBtn.textContent = '複製失敗，請嘗試其他方式';
+                copyImageBtn.style.background = '#f44336';
+                setTimeout(() => {
+                    copyImageBtn.textContent = '📷 複製圖片';
+                    copyImageBtn.style.background = '#4CAF50';
+                }, 2000);
+            });
+            
+            buttonContainer.appendChild(copyImageBtn);
+        }
+        
+        // 複製連結按鈕
+        const copyLinkBtn = document.createElement('button');
+        copyLinkBtn.textContent = '🔗 複製圖片連結';
+        copyLinkBtn.style.cssText = `
+            padding: 14px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+        `;
+        
+        copyLinkBtn.addEventListener('click', async () => {
+            try {
+                const textToCopy = imgSrc;
+                
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(textToCopy);
+                } else {
+                    // 備用方案
+                    const textArea = document.createElement('textarea');
+                    textArea.value = textToCopy;
+                    textArea.style.position = 'fixed';
+                    textArea.style.top = '-1000px';
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                }
+                
+                document.body.removeChild(modal);
+                document.body.style.overflow = '';
+                resolve({ success: true, method: 'link-copy' });
+            } catch (error) {
+                copyLinkBtn.textContent = '複製失敗';
+                copyLinkBtn.style.background = '#f44336';
+                setTimeout(() => {
+                    copyLinkBtn.textContent = '🔗 複製圖片連結';
+                    copyLinkBtn.style.background = '#2196F3';
+                }, 2000);
+            }
+        });
+        
+        // 儲存圖片按鈕
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = '💾 儲存圖片';
+        saveBtn.style.cssText = `
+            padding: 14px;
+            background: #FF9800;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+        `;
+        
+        saveBtn.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.href = imgSrc;
+            link.download = `${imgCode || 'spongebob-image'}.jpg`;
+            link.click();
+            
+            document.body.removeChild(modal);
+            document.body.style.overflow = '';
+            resolve({ success: true, method: 'download' });
+        });
+        
+        // 取消按鈕
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = '取消';
+        cancelBtn.style.cssText = `
+            padding: 14px;
+            background: #757575;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+        `;
+        
+        cancelBtn.addEventListener('click', () => {
+            document.body.removeChild(modal);
+            document.body.style.overflow = '';
+            resolve({ success: false, method: 'cancelled' });
+        });
+        
+        buttonContainer.appendChild(copyLinkBtn);
+        buttonContainer.appendChild(saveBtn);
+        buttonContainer.appendChild(cancelBtn);
+        
+        menu.appendChild(title);
+        menu.appendChild(imgPreview);
+        menu.appendChild(buttonContainer);
+        modal.appendChild(menu);
+        
+        document.body.appendChild(modal);
+        document.body.style.overflow = 'hidden';
+        
+        // 點擊背景關閉
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                document.body.removeChild(modal);
+                document.body.style.overflow = '';
+                resolve({ success: false, method: 'cancelled' });
+            }
+        });
+    });
+}
+
+// 更新主要的複製函數
 async function copyImageToClipboard(imgElement, imgCode) {
     try {
-        // 方法1: 如果圖片已經加載到頁面中，使用 canvas 轉換
+        let result;
+        
+        if (isMobileDevice()) {
+            // 手機設備使用專門的複製方法
+            result = await copyImageToClipboardMobile(imgElement, imgCode, imgElement.src);
+        } else {
+            // 桌面設備使用原有方法
+            result = await copyImageToClipboardDesktop(imgElement, imgCode);
+        }
+        
+        return result.success;
+    } catch (error) {
+        console.error('複製失敗:', error);
+        return false;
+    }
+}
+// 複製圖片到剪貼簿
+async function copyImageToClipboardDesktop(imgElement, imgCode) {
+    try {
         if (imgElement && imgElement.complete && imgElement.naturalWidth > 0) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
@@ -446,14 +855,10 @@ async function copyImageToClipboard(imgElement, imgCode) {
             canvas.width = imgElement.naturalWidth;
             canvas.height = imgElement.naturalHeight;
             
-            // 設置白色背景（以防透明圖片）
             ctx.fillStyle = 'white';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // 繪製圖片到 canvas
             ctx.drawImage(imgElement, 0, 0);
             
-            // 嘗試不同的圖片格式
             const formats = ['image/png', 'image/jpeg', 'image/webp'];
             
             for (const format of formats) {
@@ -463,22 +868,20 @@ async function copyImageToClipboard(imgElement, imgCode) {
                     });
                     
                     if (blob && navigator.clipboard && navigator.clipboard.write) {
-                        // 檢查瀏覽器是否支援此格式
                         const clipboardItem = new ClipboardItem({
                             [format]: blob
                         });
                         
                         await navigator.clipboard.write([clipboardItem]);
-                        return true;
+                        return { success: true, method: 'desktop-clipboard' };
                     }
                 } catch (formatError) {
                     console.warn(`格式 ${format} 不支援:`, formatError);
-                    continue; // 嘗試下一個格式
+                    continue;
                 }
             }
         }
         
-        // 方法2: 嘗試通過 API 獲取（如果有 SS 代碼）
         if (imgCode && /^SS\d+/i.test(imgCode)) {
             try {
                 const apiUrl = `${API_BASE_URL}/image?code=${imgCode}&dir=1`;
@@ -487,7 +890,6 @@ async function copyImageToClipboard(imgElement, imgCode) {
                 if (response.ok) {
                     const blob = await response.blob();
                     
-                    // 如果是 JPEG，轉換為 PNG
                     if (blob.type === 'image/jpeg') {
                         const convertedBlob = await convertBlobToPng(blob);
                         if (convertedBlob && navigator.clipboard && navigator.clipboard.write) {
@@ -496,7 +898,7 @@ async function copyImageToClipboard(imgElement, imgCode) {
                                     'image/png': convertedBlob
                                 })
                             ]);
-                            return true;
+                            return { success: true, method: 'desktop-api' };
                         }
                     } else if (navigator.clipboard && navigator.clipboard.write) {
                         await navigator.clipboard.write([
@@ -504,7 +906,7 @@ async function copyImageToClipboard(imgElement, imgCode) {
                                 [blob.type]: blob
                             })
                         ]);
-                        return true;
+                        return { success: true, method: 'desktop-api' };
                     }
                 }
             } catch (error) {
@@ -512,10 +914,10 @@ async function copyImageToClipboard(imgElement, imgCode) {
             }
         }
         
-        return false;
+        return { success: false, method: 'desktop-failed' };
     } catch (error) {
-        console.error('複製圖片失敗:', error);
-        return false;
+        console.error('桌面複製失敗:', error);
+        return { success: false, method: 'desktop-error' };
     }
 }
 
@@ -571,10 +973,38 @@ async function copyImageLinkToClipboard(imgSrc, imgCode, imgText) {
     }
 }
 
-function showCopyStatus(success, message, element) {
+function showCopyStatus(success, message, method) {
+    let statusMessage = message;
+    
+    if (!statusMessage) {
+        if (success) {
+            switch (method) {
+                case 'clipboard-api':
+                    statusMessage = '圖片已複製到剪貼簿!';
+                    break;
+                case 'ios-longpress':
+                    statusMessage = '請長按圖片選擇複製';
+                    break;
+                case 'mobile-clipboard':
+                    statusMessage = '圖片已複製!';
+                    break;
+                case 'link-copy':
+                    statusMessage = '圖片連結已複製!';
+                    break;
+                case 'download':
+                    statusMessage = '圖片開始下載!';
+                    break;
+                default:
+                    statusMessage = '操作完成!';
+            }
+        } else {
+            statusMessage = '操作失敗，請稍後再試';
+        }
+    }
+    
     const toast = document.createElement('div');
     toast.className = 'copy-toast';
-    toast.textContent = message || (success ? '圖片已複製到剪貼簿!' : '複製失敗，請稍後再試');
+    toast.textContent = statusMessage;
     toast.style.cssText = `
         position: fixed;
         top: 20px;
@@ -583,7 +1013,7 @@ function showCopyStatus(success, message, element) {
         color: white;
         padding: 12px 20px;
         border-radius: 8px;
-        z-index: 10000;
+        z-index: 10002;
         font-size: 14px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         opacity: 0;
@@ -595,13 +1025,11 @@ function showCopyStatus(success, message, element) {
     
     document.body.appendChild(toast);
     
-    // 顯示動畫
     setTimeout(() => {
         toast.style.opacity = '1';
         toast.style.transform = 'translateY(0)';
     }, 10);
     
-    // 3秒後移除
     setTimeout(() => {
         toast.style.opacity = '0';
         toast.style.transform = 'translateY(-20px)';
@@ -612,7 +1040,19 @@ function showCopyStatus(success, message, element) {
         }, 300);
     }, 3000);
 }
-
+function updateResultsSummaryText() {
+    const style = document.createElement('style');
+    style.textContent = `
+        .results-summary::after {
+            content: "${isMobileDevice() ? 
+                ' | 點擊圖片複製 | 長按查看大圖' : 
+                ' | 點擊圖片複製到剪貼簿 | Ctrl+點擊查看大圖'}";
+            font-size: 0.9em;
+            opacity: 0.7;
+        }
+    `;
+    document.head.appendChild(style);
+}
 // 創建圖片模態框
 function createImageModal(imgSrc, imgCode, imgText) {
     const modal = document.createElement('div');
